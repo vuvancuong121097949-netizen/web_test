@@ -7324,7 +7324,11 @@ const app = {
             }
         });
         const accounts = deliveredValues
-            .map((value, index) => this.parseDeliveredAccount(value, index, providerRawValues[index] || value));
+            .map((value, index) => this.parseDeliveredAccount(value, index, providerRawValues[index] || value))
+            .map(account => ({
+                ...account,
+                detailText: account.fields.map(field => `${field.label}: ${field.value}`).join(' | ')
+            }));
         this._activeDeliveryAccounts = accounts;
         document.getElementById('account-delivery-title').textContent = order.productName || 'Tài khoản của bạn';
         document.getElementById('account-delivery-subtitle').textContent =
@@ -7376,14 +7380,14 @@ const app = {
                     </div>
                     <div class="delivery-source-note">
                         <div class="delivery-source-note-heading">
-                            <span><i class="fas fa-code"></i> ${order.deliveryMode === 'provider' ? 'Dữ liệu gốc từ API' : 'Dữ liệu gốc khi giao hàng'}</span>
+                            <span><i class="fas fa-circle-info"></i> Thông tin chi tiết</span>
                             <button type="button" class="btn-outline"
                                 onclick="app.copyDeliveryAccount(${accountIndex})">
-                                <i class="far fa-copy"></i> Sao chép bản gốc
+                                <i class="far fa-copy"></i> Sao chép chi tiết
                             </button>
                         </div>
-                        <code>${this.escapeHtml(account.raw)}</code>
-                        <small>Chuỗi này được giữ nguyên theo nguồn; hãy dùng nếu các ô phía trên bị tách chưa đúng.</small>
+                        <div class="delivery-detail-text">${this.escapeHtml(account.detailText)}</div>
+                        <small>Nội dung đã được sắp xếp lại để dễ đọc và lưu trữ.</small>
                     </div>
                 </article>
             `).join('');
@@ -7393,7 +7397,7 @@ const app = {
         if (copyAll) {
             copyAll.disabled = accounts.length === 0;
             copyAll.onclick = () => {
-                if (accounts.length > 0) this.copyText(accounts.map(account => account.raw).join('\n'));
+                if (accounts.length > 0) this.copyText(accounts.map(account => account.detailText).join('\n'));
             };
         }
         modal.classList.remove('hidden');
@@ -7422,7 +7426,7 @@ const app = {
 
     copyDeliveryAccount: function (accountIndex) {
         const account = this._activeDeliveryAccounts?.[accountIndex];
-        if (account) this.copyText(account.raw);
+        if (account) this.copyText(account.detailText || account.parsedRaw || account.raw);
     },
 
     // Utils

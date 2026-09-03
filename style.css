@@ -3713,9 +3713,9 @@ body.delivery-modal-open {
     padding: 11px;
     display: grid;
     gap: 8px;
-    border: 1px dashed rgba(89, 112, 255, .42);
+    border: 1px solid var(--card-border);
     border-radius: 7px;
-    background: rgba(89, 112, 255, .07);
+    background: rgba(89, 112, 255, .055);
 }
 
 .delivery-source-note-heading {
@@ -3742,16 +3742,15 @@ body.delivery-modal-open {
     font-size: 10px;
 }
 
-.delivery-source-note code {
+.delivery-detail-text {
     width: 100%;
     padding: 10px;
     border-radius: 6px;
     color: var(--text-color);
-    background: rgba(3, 9, 20, .28);
-    font-family: Consolas, monospace;
+    background: rgba(3, 9, 20, .2);
+    font-family: inherit;
     font-size: 12px;
     line-height: 1.55;
-    white-space: pre-wrap;
     overflow-wrap: anywhere;
     user-select: all;
 }
@@ -3794,7 +3793,7 @@ body.light-theme .delivery-input-wrap {
     background: #fff;
 }
 
-body.light-theme .delivery-source-note code {
+body.light-theme .delivery-detail-text {
     background: #fff;
 }
 
