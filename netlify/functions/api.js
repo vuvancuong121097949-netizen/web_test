@@ -20,6 +20,7 @@ const PRICE_MUL = 3000;
 const PROVIDER_MASTER_KEY = String(process.env.PROVIDER_MASTER_KEY || '');
 const PROVIDER_VAULT_PATH = 'secure/providerSources';
 const PROVIDER_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+const USER_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const PROVIDER_TYPES = Object.freeze({
     nnmshop: {
         name: 'NNM Shop',
@@ -51,6 +52,7 @@ const PROVIDER_TYPES = Object.freeze({
     }
 });
 const adminLoginAttempts = new Map();
+const userLoginAttempts = new Map();
 
 const DEFAULT_ALLOWED_APPS = [
     1095, 1561, 1869, 1195, 1001, 1160, 1005, 1021, 1432, 1247,
@@ -449,6 +451,73 @@ function verifyAdminSessionToken(token) {
     return payload;
 }
 
+function validateFirebaseKeySegment(value, label = 'Mã dữ liệu') {
+    const segment = String(value || '').trim();
+    if (!segment || segment.length > 80 || /[.#$\[\]\/]/.test(segment)) {
+        throw { status: 400, code: 'INVALID_KEY', error: `${label} không hợp lệ.` };
+    }
+    return segment;
+}
+
+function createUserSessionToken(username, sessionVersion) {
+    const now = Date.now();
+    const payload = {
+        sub: 'user',
+        username: validateFirebaseKeySegment(username, 'Tên đăng nhập'),
+        sv: Number(sessionVersion || 0),
+        iat: now,
+        exp: now + USER_SESSION_TTL_MS,
+        nonce: crypto.randomBytes(12).toString('hex')
+    };
+    const encoded = base64UrlEncode(JSON.stringify(payload));
+    const signature = crypto.createHmac('sha256', deriveVaultKey('user-session-v1'))
+        .update(encoded)
+        .digest();
+    return `${encoded}.${base64UrlEncode(signature)}`;
+}
+
+function verifyUserSessionToken(token) {
+    requireProviderVaultConfig();
+    const parts = String(token || '').split('.');
+    if (parts.length !== 2 || !parts[0] || !parts[1]) {
+        throw { status: 401, code: 'USER_AUTH_REQUIRED', error: 'Vui lòng đăng xuất rồi đăng nhập lại để thanh toán sản phẩm API.' };
+    }
+    const expected = crypto.createHmac('sha256', deriveVaultKey('user-session-v1'))
+        .update(parts[0])
+        .digest();
+    const received = base64UrlDecode(parts[1]);
+    if (received.length !== expected.length || !crypto.timingSafeEqual(received, expected)) {
+        throw { status: 401, code: 'INVALID_USER_SESSION', error: 'Phiên thanh toán không hợp lệ. Vui lòng đăng nhập lại.' };
+    }
+    let payload;
+    try { payload = JSON.parse(base64UrlDecode(parts[0]).toString('utf8')); }
+    catch (e) {
+        throw { status: 401, code: 'INVALID_USER_SESSION', error: 'Phiên thanh toán không hợp lệ. Vui lòng đăng nhập lại.' };
+    }
+    if (payload.sub !== 'user' || !Number.isFinite(payload.exp) || payload.exp <= Date.now()) {
+        throw { status: 401, code: 'USER_SESSION_EXPIRED', error: 'Phiên thanh toán đã hết hạn. Vui lòng đăng nhập lại.' };
+    }
+    payload.username = validateFirebaseKeySegment(payload.username, 'Tên đăng nhập');
+    return payload;
+}
+
+function getBearerToken(event) {
+    const authorization = String(event.headers.authorization || event.headers.Authorization || '');
+    return /^Bearer\s+/i.test(authorization) ? authorization.replace(/^Bearer\s+/i, '').trim() : '';
+}
+
+async function requireCheckoutUser(event, apiKey) {
+    const bearerToken = getBearerToken(event);
+    if (!bearerToken && apiKey) return authenticate(apiKey);
+    const payload = verifyUserSessionToken(bearerToken);
+    const userData = await fbSecureGet(`users/${payload.username}`);
+    if (!userData || typeof userData !== 'object'
+        || Number(userData.sessionVersion || 0) !== Number(payload.sv || 0)) {
+        throw { status: 401, code: 'USER_SESSION_REVOKED', error: 'Phiên đăng nhập không còn hiệu lực. Vui lòng đăng nhập lại.' };
+    }
+    return { username: payload.username, userData };
+}
+
 function getAdminToken(event) {
     const authorization = String(event.headers.authorization || event.headers.Authorization || '');
     if (/^Bearer\s+/i.test(authorization)) return authorization.replace(/^Bearer\s+/i, '').trim();
@@ -503,6 +572,24 @@ function recordAdminLoginFailure(key) {
     adminLoginAttempts.set(key, attempts.slice(-5));
 }
 
+function assertUserLoginRate(event) {
+    const key = getAdminClientKey(event);
+    const now = Date.now();
+    const windowStart = now - (10 * 60 * 1000);
+    const recent = (userLoginAttempts.get(key) || []).filter(timestamp => timestamp >= windowStart);
+    userLoginAttempts.set(key, recent);
+    if (recent.length >= 10) {
+        throw { status: 429, code: 'TOO_MANY_LOGIN_ATTEMPTS', error: 'Bạn thử đăng nhập quá nhiều lần. Vui lòng chờ 10 phút.' };
+    }
+    return key;
+}
+
+function recordUserLoginFailure(key) {
+    const attempts = userLoginAttempts.get(key) || [];
+    attempts.push(Date.now());
+    userLoginAttempts.set(key, attempts.slice(-10));
+}
+
 function encryptProviderKey(apiKey, providerId, providerType) {
     const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv('aes-256-gcm', deriveVaultKey('provider-api-key-v1'), iv);
@@ -546,25 +633,31 @@ function getProviderConfig(providerType) {
     return config;
 }
 
-function providerRequest(providerType, endpoint, apiKey) {
+function providerRequest(providerType, endpoint, apiKey, options = {}) {
     const config = getProviderConfig(providerType);
     const target = new URL(endpoint, config.baseUrl);
+    const method = String(options.method || 'GET').toUpperCase();
+    const requestBody = options.body === undefined ? '' : JSON.stringify(options.body);
     return new Promise((resolve, reject) => {
         const request = https.request({
             hostname: target.hostname,
             port: 443,
             path: target.pathname + target.search,
-            method: 'GET',
+            method,
             headers: {
                 'Accept': 'application/json',
                 'X-API-Key': apiKey,
-                'User-Agent': 'TaiKhoanXin-ProviderVault/1.0'
+                'User-Agent': 'TaiKhoanXin-ProviderVault/1.1',
+                ...(requestBody ? {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(requestBody)
+                } : {})
             }
         }, response => {
             let responseBody = '';
             response.on('data', chunk => {
                 responseBody += chunk;
-                if (responseBody.length > 1024 * 1024) {
+                if (responseBody.length > 5 * 1024 * 1024) {
                     request.destroy(new Error('Phản hồi nhà cung cấp quá lớn.'));
                 }
             });
@@ -574,25 +667,28 @@ function providerRequest(providerType, endpoint, apiKey) {
                 catch (e) {
                     return reject({ status: 502, code: 'PROVIDER_INVALID_RESPONSE', error: 'Nhà cung cấp trả dữ liệu không hợp lệ.' });
                 }
-                const providerMessage = String(payload?.message || payload?.error || payload?.msg || '')
+                const providerMessage = String(payload?.detail || payload?.message || payload?.error || payload?.msg || '')
                     .replaceAll(String(apiKey), '***')
                     .slice(0, 240);
                 if (response.statusCode < 200 || response.statusCode >= 300 || payload?.success === false) {
                     return reject({
-                        status: 400,
+                        status: response.statusCode >= 400 && response.statusCode < 500 ? response.statusCode : 502,
                         code: 'PROVIDER_REJECTED',
-                        error: providerMessage || `Nhà cung cấp từ chối kết nối (HTTP ${response.statusCode}).`
+                        error: providerMessage || `Nhà cung cấp từ chối kết nối (HTTP ${response.statusCode}).`,
+                        providerResponded: true
                     });
                 }
                 resolve(payload);
             });
         });
-        request.setTimeout(12000, () => request.destroy(new Error('Nhà cung cấp phản hồi quá chậm.')));
+        request.setTimeout(method === 'GET' ? 12000 : 30000, () => request.destroy(new Error('Nhà cung cấp phản hồi quá chậm.')));
         request.on('error', error => reject({
             status: 502,
             code: 'PROVIDER_UNAVAILABLE',
-            error: String(error.message || 'Không thể kết nối nhà cung cấp.').slice(0, 240)
+            error: String(error.message || 'Không thể kết nối nhà cung cấp.').slice(0, 240),
+            uncertain: method !== 'GET'
         }));
+        if (requestBody) request.write(requestBody);
         request.end();
     });
 }
@@ -631,8 +727,132 @@ function normalizeProviderProducts(providerType, payload) {
         name: String(item.name ?? item.product_name ?? item.title ?? 'Sản phẩm').slice(0, 160),
         price: Number(item.price_vnd ?? item.price ?? item.unitPrice ?? 0) || 0,
         stock: Number(item.stock ?? item.quantity ?? item.available ?? 0) || 0,
+        description: String(item.description ?? item.desc ?? item.note ?? '').slice(0, 500),
         providerType
     })).filter(item => item.id);
+}
+
+function providerProductIdValue(value) {
+    const text = String(value ?? '').trim();
+    return /^\d+$/.test(text) ? Number(text) : text;
+}
+
+function buildProviderPurchaseBody(providerType, productId, quantity, orderId) {
+    const normalizedId = providerProductIdValue(productId);
+    if (providerType === 'nastele') return { productId: normalizedId, qty: quantity };
+    if (providerType === 'tunvn') return { product_id: normalizedId, quantity, currency: 'vnd' };
+    if (providerType === 'nanlux') {
+        return { product_id: normalizedId, qty: quantity, buyer_info: `Website order ${orderId}` };
+    }
+    return { product_id: normalizedId, qty: quantity };
+}
+
+function formatProviderAccount(value) {
+    if (typeof value === 'string' || typeof value === 'number') return String(value).trim();
+    if (!value || typeof value !== 'object') return '';
+    if (typeof value.account === 'string') return value.account.trim();
+    if (typeof value.value === 'string') return value.value.trim();
+    const fields = [
+        value.username ?? value.email ?? value.login ?? value.user ?? value.id,
+        value.password ?? value.pass,
+        value.twofa ?? value.two_fa ?? value['2fa'] ?? value.recovery ?? value.recovery_email ?? value.secret,
+        value.note
+    ].map(item => item === undefined || item === null ? '' : String(item).trim()).filter(Boolean);
+    return fields.join('|');
+}
+
+function serializeProviderAccount(value) {
+    if (typeof value === 'string' || typeof value === 'number') return String(value);
+    if (!value || typeof value !== 'object') return '';
+    try {
+        return JSON.stringify(value);
+    } catch (_) {
+        return String(value);
+    }
+}
+
+function extractProviderAccountRecords(payload) {
+    const results = [];
+    const collect = (value, depth = 0) => {
+        if (depth > 5 || value === undefined || value === null) return;
+        if (Array.isArray(value)) {
+            value.forEach(item => collect(item, depth + 1));
+            return;
+        }
+        if (typeof value === 'string' || typeof value === 'number') {
+            const account = formatProviderAccount(value);
+            if (account) results.push({ account, raw: serializeProviderAccount(value) });
+            return;
+        }
+        if (typeof value !== 'object') return;
+        if (Array.isArray(value.accounts)) return collect(value.accounts, depth + 1);
+        if (Array.isArray(value.items)) return collect(value.items, depth + 1);
+        const account = formatProviderAccount(value);
+        if (account) results.push({ account, raw: serializeProviderAccount(value) });
+    };
+
+    const candidates = [
+        payload?.accounts,
+        payload?.items,
+        payload?.data?.accounts,
+        payload?.data?.items,
+        payload?.order?.accounts,
+        payload?.order?.items,
+        payload?.data?.order?.accounts,
+        payload?.data?.order?.items,
+        payload?.result?.accounts,
+        payload?.result?.items,
+        payload?.data?.result?.accounts,
+        payload?.data?.result?.items
+    ];
+    candidates.forEach(candidate => collect(candidate));
+    const seen = new Set();
+    return results.filter(item => {
+        const key = `${item.account}\n${item.raw}`;
+        if (!item.account || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+function normalizeProviderPurchase(providerType, payload) {
+    const data = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
+    const accountRecords = extractProviderAccountRecords(payload);
+    const accounts = accountRecords.map(item => item.account);
+    const rawAccounts = accountRecords.map(item => item.raw || item.account);
+    const orderId = data?.order_id ?? data?.orderId ?? data?.order_code
+        ?? payload?.order_id ?? payload?.orderId ?? payload?.order_code
+        ?? data?.id ?? payload?.id ?? '';
+    const totalCost = Number(
+        data?.total_cost ?? data?.totalAmount ?? data?.amount_vnd ?? data?.total_price
+        ?? payload?.total_cost ?? payload?.totalAmount ?? payload?.amount_vnd ?? payload?.total_price ?? 0
+    ) || 0;
+    return {
+        providerType,
+        providerOrderId: String(orderId || ''),
+        totalCost,
+        accounts,
+        rawAccounts
+    };
+}
+
+async function buyProviderProduct(record, providerId, productId, quantity, orderId) {
+    const config = getProviderConfig(record.type);
+    const storedKey = decryptProviderKey(record.secret, providerId, record.type);
+    const payload = await providerRequest(record.type, config.buyPath, storedKey, {
+        method: 'POST',
+        body: buildProviderPurchaseBody(record.type, productId, quantity, orderId)
+    });
+    const purchase = normalizeProviderPurchase(record.type, payload);
+    if (purchase.accounts.length < quantity) {
+        throw {
+            status: 502,
+            code: 'PROVIDER_EMPTY_DELIVERY',
+            error: 'Nguồn đã nhận yêu cầu nhưng chưa trả đủ dữ liệu tài khoản. Admin cần kiểm tra đơn bên nguồn.',
+            uncertain: true
+        };
+    }
+    return purchase;
 }
 
 function sanitizeProviderRecord(id, record) {
@@ -694,11 +914,244 @@ exports.handler = async (event) => {
 
     // Root info
     if (path === '/' || path === '')
-        return ok({ service: 'TaiKhoanXin OTP API (Netlify)', version: '1.1.0', endpoints: ['/api/balance', '/api/apps', '/api/rent', '/api/otp/:id', '/api/cancel/:id', '/api/history'] });
+        return ok({ service: 'TaiKhoanXin API (Netlify)', version: '1.2.0', endpoints: ['/api/balance', '/api/apps', '/api/rent', '/api/otp/:id', '/api/cancel/:id', '/api/history', '/api/provider/checkout'] });
 
     try {
+        // Các thao tác đăng nhập, quản trị và mua hàng chỉ nhận yêu cầu cùng website.
+        if (path.startsWith('/admin/') || path.startsWith('/user/') || path.startsWith('/provider/')) {
+            assertAdminSameOrigin(event);
+        }
+
+        if (path === '/user/session' && method === 'POST') {
+            requireProviderVaultConfig();
+            const rateKey = assertUserLoginRate(event);
+            const username = validateFirebaseKeySegment(body.username, 'Tên đăng nhập');
+            const password = String(body.password || '');
+            if (!password || password.length > 300) {
+                recordUserLoginFailure(rateKey);
+                return err(401, 'INVALID_USER_CREDENTIALS', 'Tên đăng nhập hoặc mật khẩu không đúng.');
+            }
+            const userData = await fbSecureGet(`users/${username}`);
+            if (!userData || typeof userData !== 'object' || !safeSecretEqual(password, userData.password)) {
+                recordUserLoginFailure(rateKey);
+                return err(401, 'INVALID_USER_CREDENTIALS', 'Tên đăng nhập hoặc mật khẩu không đúng.');
+            }
+            userLoginAttempts.delete(rateKey);
+            return ok({
+                data: {
+                    token: createUserSessionToken(username, userData.sessionVersion),
+                    expiresIn: USER_SESSION_TTL_MS,
+                    expiresAt: Date.now() + USER_SESSION_TTL_MS,
+                    username,
+                    sessionVersion: Number(userData.sessionVersion || 0)
+                }
+            });
+        }
+
+        if (path === '/provider/checkout' && method === 'POST') {
+            requireProviderVaultConfig();
+            const { username } = await requireCheckoutUser(event, apiKey);
+            const productId = validateFirebaseKeySegment(body.productId, 'Mã sản phẩm');
+            const orderId = validateFirebaseKeySegment(body.orderId, 'Mã đơn hàng');
+            const quantity = Number(body.quantity);
+            if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
+                return err(400, 'INVALID_QUANTITY', 'Số lượng mua phải từ 1 đến 100.');
+            }
+
+            const existingOrder = await fbSecureGet(`orders/${orderId}`);
+            if (existingOrder) {
+                if (existingOrder.username === username
+                    && existingOrder.fulfillmentSource === 'provider'
+                    && (existingOrder.status === 'Hoàn thành' || existingOrder.providerPurchaseState === 'completed')) {
+                    const deliveredAccounts = Array.isArray(existingOrder.deliveredAccounts)
+                        ? existingOrder.deliveredAccounts
+                        : Object.values(existingOrder.deliveredAccounts || {});
+                    return ok({
+                        data: {
+                            orderId,
+                            totalAmount: Number(existingOrder.price || 0),
+                            deliveredQuantity: deliveredAccounts.length,
+                            status: existingOrder.status,
+                            idempotent: true
+                        }
+                    });
+                }
+                return err(409, 'ORDER_ALREADY_EXISTS', 'Đơn hàng này đã được tạo hoặc đang xử lý. Vui lòng xem trong lịch sử đơn.');
+            }
+
+            const product = await fbSecureGet(`products/${productId}`);
+            if (!product || typeof product !== 'object') return err(404, 'PRODUCT_NOT_FOUND', 'Sản phẩm không còn tồn tại.');
+            if (product.sourceMode !== 'provider' && product.deliveryMode !== 'provider') {
+                return err(400, 'PRODUCT_NOT_PROVIDER', 'Sản phẩm này không được cấu hình giao từ nguồn API.');
+            }
+            const providerId = validateProviderId(product.providerId);
+            const providerProductId = String(product.providerProductId || '').trim();
+            if (!providerProductId) return err(400, 'PROVIDER_PRODUCT_MISSING', 'Sản phẩm chưa liên kết với mã hàng bên nguồn.');
+
+            const providerRecord = await fbSecureGet(`${PROVIDER_VAULT_PATH}/${providerId}`);
+            if (!providerRecord || typeof providerRecord !== 'object' || providerRecord.enabled === false) {
+                return err(409, 'PROVIDER_DISABLED', 'Nguồn API đang tắt hoặc đã bị xóa.');
+            }
+            const storedKey = decryptProviderKey(providerRecord.secret, providerId, providerRecord.type);
+            const providerConfig = getProviderConfig(providerRecord.type);
+            const catalogPayload = await providerRequest(providerRecord.type, providerConfig.productsPath, storedKey);
+            const providerProducts = normalizeProviderProducts(providerRecord.type, catalogPayload);
+            const liveProduct = providerProducts.find(item => String(item.id) === providerProductId);
+            if (!liveProduct) return err(404, 'PROVIDER_PRODUCT_NOT_FOUND', 'Sản phẩm không còn trong danh mục của nguồn API.');
+            if (Number(liveProduct.stock || 0) < quantity) {
+                await fbSecurePatch(`products/${productId}`, { quantity: Math.max(0, Number(liveProduct.stock || 0)), updatedAt: Date.now() });
+                return err(409, 'PROVIDER_OUT_OF_STOCK', `Nguồn API chỉ còn ${Number(liveProduct.stock || 0)} sản phẩm.`);
+            }
+
+            const events = await fbSecureGet('settings/events') || {};
+            const discountPercent = Math.min(100, Math.max(0, Number(events.discountPercent || 0)));
+            const basePrice = Number(product.price || 0);
+            if (!Number.isFinite(basePrice) || basePrice <= 0) return err(400, 'INVALID_PRODUCT_PRICE', 'Giá bán sản phẩm không hợp lệ.');
+            const unitPrice = Math.round(basePrice - (basePrice * discountPercent / 100));
+            const totalAmount = unitPrice * quantity;
+            const providerUnitCost = Number(liveProduct.price || 0);
+            if (providerUnitCost > unitPrice) {
+                await fbSecurePatch(`products/${productId}`, {
+                    quantity: Math.max(0, Number(liveProduct.stock || 0)),
+                    providerCost: providerUnitCost,
+                    updatedAt: Date.now()
+                });
+                return err(
+                    409,
+                    'PROVIDER_PRICE_INCREASED',
+                    `Giá nguồn hiện là ${providerUnitCost.toLocaleString('vi-VN')}đ, cao hơn giá bán sau khuyến mãi ${unitPrice.toLocaleString('vi-VN')}đ. Admin cần cập nhật giá bán.`
+                );
+            }
+            const now = Date.now();
+            const dateDisplay = new Date(now).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+            const orderBase = {
+                username,
+                productId,
+                productName: `${product.name || liveProduct.name} (x${quantity})`,
+                quantity,
+                duration: product.duration || '',
+                productFormat: product.format || '',
+                price: totalAmount,
+                date: dateDisplay,
+                timestamp: now,
+                purchasedAt: now,
+                purchasedAtDisplay: dateDisplay,
+                warranty: product.warranty || 'Không bảo hành',
+                warrantyDays: Number(product.warrantyDays || 0),
+                deliveryMode: 'provider',
+                fulfillmentSource: 'provider',
+                providerId,
+                providerType: providerRecord.type,
+                providerLabel: String(providerRecord.label || product.providerLabel || 'Nguồn API').slice(0, 80),
+                providerProductId,
+                status: 'Đang lấy hàng từ nguồn API...',
+                providerPurchaseState: 'reserved',
+                accountDetails: 'Đơn đã thanh toán và đang lấy tài khoản từ nguồn API.'
+            };
+
+            const reservation = await fbTransaction(`orders/${orderId}`, current => current ? undefined : orderBase);
+            if (!reservation.committed) return err(409, 'ORDER_ALREADY_EXISTS', 'Đơn hàng đã được tạo. Vui lòng xem trong lịch sử đơn.');
+
+            const debit = await fbTransaction(`users/${username}/balance`, balance => {
+                const available = Number(balance || 0);
+                if (available < totalAmount) return undefined;
+                return available - totalAmount;
+            });
+            if (!debit.committed) {
+                await fbSecurePatch(`orders/${orderId}`, {
+                    status: 'Hủy - Số dư không đủ',
+                    providerPurchaseState: 'cancelled',
+                    accountDetails: 'Số dư không đủ để thanh toán. Nguồn API chưa bị gọi.',
+                    cancelledAt: Date.now()
+                });
+                return err(402, 'INSUFFICIENT_BALANCE', 'Số dư không đủ để thanh toán sản phẩm.');
+            }
+
+            await fbSecurePatch(`orders/${orderId}`, {
+                paymentState: 'paid',
+                providerPurchaseState: 'processing',
+                balanceAfterPayment: Number(debit.value || 0)
+            });
+
+            try {
+                const purchase = await buyProviderProduct(providerRecord, providerId, providerProductId, quantity, orderId);
+                const deliveredAccounts = purchase.accounts;
+                const accountDetails = deliveredAccounts.length <= 1
+                    ? deliveredAccounts[0]
+                    : deliveredAccounts.map((item, index) => `[${index + 1}] ${item}`).join('\n');
+                const remainingStock = Math.max(0, Number(liveProduct.stock || 0) - quantity);
+                await fbSecurePatch(`orders/${orderId}`, {
+                    status: 'Hoàn thành',
+                    accountDetails,
+                    deliveredAccounts,
+                    deliveredRawAccounts: purchase.rawAccounts,
+                    deliveredQuantity: deliveredAccounts.length,
+                    autoFulfilled: true,
+                    providerPurchaseState: 'completed',
+                    providerOrderId: purchase.providerOrderId,
+                    fulfilledAt: Date.now()
+                });
+                await fbSecurePatch(`products/${productId}`, {
+                    quantity: remainingStock,
+                    providerCost: Number(liveProduct.price || product.providerCost || 0),
+                    providerProductName: liveProduct.name,
+                    updatedAt: Date.now()
+                });
+                await fbSecureSet(`secure/providerOrderAudit/${orderId}`, {
+                    providerId,
+                    providerType: providerRecord.type,
+                    providerOrderId: purchase.providerOrderId,
+                    productId,
+                    providerProductId,
+                    requestedQuantity: quantity,
+                    deliveredQuantity: deliveredAccounts.length,
+                    providerCost: Number(purchase.totalCost || liveProduct.price * quantity || 0),
+                    createdAt: now,
+                    fulfilledAt: Date.now()
+                });
+                return ok({
+                    data: {
+                        orderId,
+                        status: 'Hoàn thành',
+                        totalAmount,
+                        balanceRemaining: Number(debit.value || 0),
+                        deliveredQuantity: deliveredAccounts.length
+                    }
+                });
+            } catch (providerError) {
+                if (providerError.uncertain) {
+                    await fbSecurePatch(`orders/${orderId}`, {
+                        status: 'Cần admin kiểm tra nguồn',
+                        providerPurchaseState: 'uncertain',
+                        accountDetails: 'Nguồn API chưa trả kết quả rõ ràng. Admin cần kiểm tra đơn bên nguồn trước khi hoàn tiền.',
+                        providerError: String(providerError.error || 'Không có phản hồi rõ ràng').slice(0, 240)
+                    });
+                    throw {
+                        status: 502,
+                        code: 'PROVIDER_PURCHASE_UNCERTAIN',
+                        error: 'Nguồn API chưa trả kết quả rõ ràng. Đơn đã chuyển cho admin kiểm tra và chưa bị gọi mua lại.'
+                    };
+                }
+
+                const refund = await addUserBalance(username, totalAmount);
+                await fbSecurePatch(`orders/${orderId}`, {
+                    status: 'Hủy - Đã hoàn tiền',
+                    providerPurchaseState: 'refunded',
+                    accountDetails: 'Nguồn API từ chối đơn. Hệ thống đã hoàn tiền vào số dư web.',
+                    providerError: String(providerError.error || 'Nguồn từ chối đơn').slice(0, 240),
+                    refundedAt: Date.now(),
+                    refundedAmount: totalAmount,
+                    balanceAfterRefund: Number(refund.value || 0)
+                });
+                throw {
+                    status: providerError.status || 409,
+                    code: providerError.code || 'PROVIDER_PURCHASE_FAILED',
+                    error: `${providerError.error || 'Nguồn API từ chối đơn.'} Tiền đã được hoàn vào số dư web.`
+                };
+            }
+        }
+
         // ---- KÉT API NHÀ CUNG CẤP (chỉ admin) ----
-        if (path.startsWith('/admin/')) assertAdminSameOrigin(event);
 
         if (path === '/admin/status' && method === 'GET') {
             return ok({

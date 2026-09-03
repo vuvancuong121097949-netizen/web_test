@@ -1472,7 +1472,7 @@
                             <i class="fas fa-truck"></i> Nguồn hàng
                         </label>
                         <!-- Radio chọn chế độ -->
-                        <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+                        <div class="product-source-options">
                             <label id="source-manual-label" style="flex:1;min-width:140px;display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;border:2px solid var(--primary);background:rgba(255,0,127,0.1);cursor:pointer;transition:all 0.2s;">
                                 <input type="radio" name="product-source-mode" id="source-manual" value="manual" checked onchange="app.toggleProductSourceMode('manual')" style="accent-color:var(--primary);">
                                 <span>🖐️ <strong>Thủ công</strong><br><small style="color:var(--text-muted);font-size:0.72rem;">Admin tự cấp tài khoản</small></span>
@@ -1480,6 +1480,10 @@
                             <label id="source-auto-label" style="flex:1;min-width:140px;display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;border:2px solid var(--card-border);cursor:pointer;transition:all 0.2s;">
                                 <input type="radio" name="product-source-mode" id="source-auto" value="inventory" onchange="app.toggleProductSourceMode('inventory')" style="accent-color:var(--accent);">
                                 <span>⚡ <strong>Tự động</strong><br><small style="color:var(--text-muted);font-size:0.72rem;">Kho tài khoản nhập sẵn</small></span>
+                            </label>
+                            <label id="source-provider-label" style="flex:1;min-width:140px;display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;border:2px solid var(--card-border);cursor:pointer;transition:all 0.2s;">
+                                <input type="radio" name="product-source-mode" id="source-provider" value="provider" onchange="app.toggleProductSourceMode('provider')" style="accent-color:#8b5cf6;">
+                                <span>🔌 <strong>Nguồn API</strong><br><small style="color:var(--text-muted);font-size:0.72rem;">Mua và giao từ bot nguồn</small></span>
                             </label>
                         </div>
 
@@ -1516,6 +1520,37 @@
                                 placeholder="Mỗi dòng là một tài khoản&#10;email1@example.com|matkhau1&#10;email2@example.com|matkhau2"></textarea>
                             <div id="inventory-preview" class="inventory-preview">
                                 Chưa có dữ liệu mới.
+                            </div>
+                        </div>
+
+                        <!-- PROVIDER API SECTION (ẩn mặc định) -->
+                        <div id="provider-product-config-section" class="provider-product-config-section" style="display:none;">
+                            <div class="provider-product-picker-heading">
+                                <span><i class="fas fa-link"></i> Liên kết sản phẩm với nguồn API</span>
+                                <button type="button" class="btn-outline" onclick="app.refreshProductProviderPicker()">
+                                    <i class="fas fa-rotate"></i> Làm mới
+                                </button>
+                            </div>
+                            <p class="inventory-help">
+                                Chọn một nguồn đã lưu trong Két API, sau đó chọn đúng sản phẩm gốc. Khi khách thanh toán,
+                                Netlify sẽ gọi API nguồn và giao tài khoản ngay trong lịch sử đơn.
+                            </p>
+                            <div class="provider-product-picker-grid">
+                                <label>
+                                    <span>Nguồn API</span>
+                                    <select id="product-provider-source" onchange="app.adminProductProviderSourceChanged()">
+                                        <option value="">Đang tải nguồn…</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    <span>Sản phẩm bên nguồn</span>
+                                    <select id="product-provider-product" onchange="app.adminProductProviderProductChanged()" disabled>
+                                        <option value="">Chọn nguồn trước</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <div id="product-provider-status" class="product-provider-status">
+                                Chọn Nguồn API để tải danh mục sản phẩm.
                             </div>
                         </div>
                     </div>

@@ -3708,6 +3708,60 @@ body.delivery-modal-open {
     border: 0;
 }
 
+.delivery-source-note {
+    margin-top: 12px;
+    padding: 11px;
+    display: grid;
+    gap: 8px;
+    border: 1px dashed rgba(89, 112, 255, .42);
+    border-radius: 7px;
+    background: rgba(89, 112, 255, .07);
+}
+
+.delivery-source-note-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.delivery-source-note-heading > span {
+    color: var(--text-color);
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.delivery-source-note-heading > span i {
+    margin-right: 5px;
+    color: #7284ff;
+}
+
+.delivery-source-note-heading .btn-outline {
+    min-height: 30px;
+    padding: 5px 9px;
+    font-size: 10px;
+}
+
+.delivery-source-note code {
+    width: 100%;
+    padding: 10px;
+    border-radius: 6px;
+    color: var(--text-color);
+    background: rgba(3, 9, 20, .28);
+    font-family: Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: all;
+}
+
+.delivery-source-note small {
+    color: var(--text-muted);
+    font-size: 10px;
+    line-height: 1.45;
+}
+
 .account-delivery-empty {
     min-height: 150px;
     display: grid;
@@ -3737,6 +3791,10 @@ body.light-theme .delivered-account-card {
 }
 
 body.light-theme .delivery-input-wrap {
+    background: #fff;
+}
+
+body.light-theme .delivery-source-note code {
     background: #fff;
 }
 
@@ -3881,6 +3939,11 @@ body.light-theme .delivery-input-wrap {
 
     .delivered-account-fields {
         grid-template-columns: 1fr;
+    }
+
+    .delivery-source-note-heading {
+        align-items: flex-start;
+        flex-direction: column;
     }
 
     .account-delivery-footer > button {
@@ -13320,5 +13383,113 @@ body.light-theme .provider-form-grid select {
     .provider-source-actions .btn-outline.is-danger {
         flex: 0 0 42px;
         margin-left: 0;
+    }
+}
+
+/* Product source picker: manual / local inventory / provider API */
+.product-source-options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.provider-product-config-section {
+    padding: 15px;
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    border-radius: 12px;
+    background: rgba(139, 92, 246, 0.07);
+}
+
+.provider-product-picker-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.provider-product-picker-heading > span {
+    color: #a78bfa;
+    font-weight: 800;
+}
+
+.provider-product-picker-heading .btn-outline {
+    padding: 7px 11px;
+    font-size: 0.78rem;
+}
+
+.provider-product-picker-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.4fr);
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.provider-product-picker-grid label {
+    display: grid;
+    gap: 7px;
+}
+
+.provider-product-picker-grid label > span {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.provider-product-picker-grid select {
+    width: 100%;
+    min-width: 0;
+    padding: 11px 12px;
+    border: 1px solid var(--card-border);
+    border-radius: 9px;
+    background: rgba(0, 0, 0, 0.28);
+    color: var(--text-main);
+}
+
+.provider-product-picker-grid select:focus {
+    outline: none;
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.14);
+}
+
+.provider-product-picker-grid select:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+.product-provider-status {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.045);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
+.product-provider-status.is-ready {
+    background: rgba(16, 185, 129, 0.1);
+    color: #34d399;
+}
+
+.product-provider-status.is-error {
+    background: rgba(239, 68, 68, 0.1);
+    color: #fb7185;
+}
+
+body.light-theme .provider-product-config-section {
+    background: rgba(139, 92, 246, 0.055);
+}
+
+body.light-theme .provider-product-picker-grid select {
+    background: rgba(255, 255, 255, 0.88);
+    color: var(--text-main);
+}
+
+@media (max-width: 680px) {
+    .product-source-options,
+    .provider-product-picker-grid {
+        grid-template-columns: 1fr;
     }
 }

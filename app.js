@@ -73,7 +73,15 @@ const app = {
         demoInitialized: false,
         providers: [],
         editingId: '',
-        productsByProvider: {}
+        productsByProvider: {},
+        productPicker: {
+            providerId: '',
+            products: [],
+            selectedProduct: null,
+            savedProduct: null,
+            loading: false,
+            error: ''
+        }
     },
 
     init: function () {
@@ -1085,8 +1093,16 @@ const app = {
         return list.sort((a, b) => Number(b.quantity > 0) - Number(a.quantity > 0));
     },
 
-    isAutoProduct: function (product) {
+    isInventoryProduct: function (product) {
         return !!(product && (product.deliveryMode === 'inventory' || product.sourceMode === 'inventory'));
+    },
+
+    isProviderProduct: function (product) {
+        return !!(product && (product.deliveryMode === 'provider' || product.sourceMode === 'provider'));
+    },
+
+    isAutoProduct: function (product) {
+        return this.isInventoryProduct(product) || this.isProviderProduct(product);
     },
 
     isWarrantyEnabled: function (product) {
@@ -1560,12 +1576,17 @@ const app = {
         const userBalance = this.appState.currentUser ? (this.appState.currentUser.balance || 0) : 0;
         const canAfford = userBalance >= finalPrice;
         const isAuto = this.isAutoProduct(p);
+        const isProvider = this.isProviderProduct(p);
         const safeName = this.escapeHtml(p.name || 'Sản phẩm');
         const safeDuration = this.escapeHtml(p.duration || 'Dùng ngay');
         const safeDesc = this.escapeHtml(p.desc || '');
         const warrantyText = this.getWarrantyText(p);
-        const sourceLabel = isAuto ? 'Tự động 24/7' : 'Admin cấp thủ công';
-        const deliveryLabel = isAuto ? 'Giao tự động sau thanh toán' : 'Admin xử lý và cấp tài khoản';
+        const sourceLabel = isProvider
+            ? 'Nguồn API tự động'
+            : (isAuto ? 'Tự động 24/7' : 'Admin cấp thủ công');
+        const deliveryLabel = isProvider
+            ? 'Lấy hàng từ API và giao ngay sau thanh toán'
+            : (isAuto ? 'Giao tự động sau thanh toán' : 'Admin xử lý và cấp tài khoản');
 
         const logoHtml = firstLogo
             ? `<img class="pm-logo" src="${this.escapeHtml(firstLogo)}" alt="${safeName}" loading="lazy" decoding="async">`
@@ -1743,6 +1764,30 @@ const app = {
         accountLink.setAttribute('aria-label', `Tài khoản: ${identity}`);
     },
 
+    getUserSessionToken: function () {
+        try { return sessionStorage.getItem('accstore_user_session_token') || ''; }
+        catch (e) { return ''; }
+    },
+
+    createUserSession: async function (username, password) {
+        const localPreview = window.location.protocol === 'file:'
+            || ['127.0.0.1', 'localhost'].includes(String(window.location.hostname || '').toLowerCase());
+        if (localPreview) return '';
+        const response = await fetch('/api/user/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({ username, password }),
+            cache: 'no-store'
+        });
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) throw new Error('Backend đăng nhập chưa sẵn sàng.');
+        const payload = await response.json();
+        if (!response.ok || payload?.success === false) {
+            throw new Error(payload?.error || 'Không thể tạo phiên thanh toán an toàn.');
+        }
+        return payload?.data?.token || '';
+    },
+
     checkAuth: function () {
         const user = localStorage.getItem('accstore_user');
         if (user) {
@@ -1831,8 +1876,11 @@ const app = {
                     sessionVersion: 0
                 };
 
-                db.ref('users/' + u).set(newUserObj).then(() => {
-                    this.loginUser(u, 0);
+                db.ref('users/' + u).set(newUserObj).then(async () => {
+                    let userSessionToken = '';
+                    try { userSessionToken = await this.createUserSession(u, p); }
+                    catch (sessionError) { console.warn('Không thể tạo phiên thanh toán:', sessionError.message); }
+                    this.loginUser(u, 0, userSessionToken);
                     void this.recordLoginHistory(u, 'register');
                     this.showToast("Đăng ký thành công!");
                     err.innerText = "";
@@ -1858,11 +1906,14 @@ const app = {
             return;
         }
 
-        db.ref('users/' + u).once('value', snapshot => {
+        db.ref('users/' + u).once('value', async snapshot => {
             if (snapshot.exists()) {
                 const user = snapshot.val();
                 if (user.password === p) {
-                    this.loginUser(u, Number(user.sessionVersion || 0));
+                    let userSessionToken = '';
+                    try { userSessionToken = await this.createUserSession(u, p); }
+                    catch (sessionError) { console.warn('Không thể tạo phiên thanh toán:', sessionError.message); }
+                    this.loginUser(u, Number(user.sessionVersion || 0), userSessionToken);
                     void this.recordLoginHistory(u, 'login');
                     this.showToast("Đăng nhập thành công!");
                     err.innerText = "";
@@ -1993,11 +2044,15 @@ const app = {
         });
     },
 
-    loginUser: function (username, sessionVersion = 0) {
+    loginUser: function (username, sessionVersion = 0, userSessionToken = '') {
         const userObj = {
             username,
             sessionVersion: Number(sessionVersion || 0)
         };
+        try {
+            if (userSessionToken) sessionStorage.setItem('accstore_user_session_token', userSessionToken);
+            else sessionStorage.removeItem('accstore_user_session_token');
+        } catch (e) { /* sessionStorage unavailable */ }
         // Lưu local để tự động đăng nhập những lần sau
         localStorage.setItem('accstore_user', JSON.stringify(userObj));
         this.checkAuth();
@@ -2127,6 +2182,7 @@ const app = {
         this._productInventoryListener = null;
         localStorage.removeItem('accstore_user');
         sessionStorage.removeItem('accstore_provider_admin_token');
+        sessionStorage.removeItem('accstore_user_session_token');
         this.appState.currentUser = null;
         this.providerAdminState.providers = [];
         this.providerAdminState.productsByProvider = {};
@@ -2457,7 +2513,7 @@ const app = {
     // Shopping & Checkout Flow
     setupCheckout: function (product) {
         const discount = this.appState.events ? (this.appState.events.discountPercent || 0) : 0;
-        const unitPrice = discount > 0 ? product.price - (product.price * discount / 100) : product.price;
+        const unitPrice = discount > 0 ? Math.round(product.price - (product.price * discount / 100)) : product.price;
         const totalAmount = unitPrice * (product.buyQuantity || 1);
 
         const detailsContainer = document.getElementById('checkout-product-details');
@@ -2670,6 +2726,31 @@ const app = {
         return orderResult.committed;
     },
 
+    providerCheckoutRequest: async function ({ productId, orderId, quantity }) {
+        const token = this.getUserSessionToken();
+        const fallbackApiKey = this.appState.currentUser?.apiKey || '';
+        if (!token && !fallbackApiKey) {
+            throw new Error('Phiên thanh toán an toàn chưa có. Vui lòng đăng xuất rồi đăng nhập lại trước khi mua sản phẩm API.');
+        }
+        const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
+        if (token) headers.Authorization = `Bearer ${token}`;
+        else headers['X-Api-Key'] = fallbackApiKey;
+        const response = await fetch('/api/provider/checkout', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ productId, orderId, quantity }),
+            cache: 'no-store'
+        });
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) throw new Error('Backend giao hàng API chưa được deploy.');
+        const payload = await response.json();
+        if (!response.ok || payload?.success === false) {
+            if (response.status === 401 && token) sessionStorage.removeItem('accstore_user_session_token');
+            throw new Error(payload?.error || 'Không thể lấy hàng từ nguồn API.');
+        }
+        return payload.data || {};
+    },
+
     payWithBalance: async function () {
         if (!db || !this.appState.currentUser) return;
         const product = this.appState.cartItem;
@@ -2688,6 +2769,31 @@ const app = {
         const orderId = product.tempOrderId;
         const username = this.appState.currentUser.username;
         const buyQty = product.buyQuantity || 1;
+        if (this.isProviderProduct(product)) {
+            try {
+                const result = await this.providerCheckoutRequest({
+                    productId: product.id,
+                    orderId,
+                    quantity: buyQty
+                });
+                this.showToast(`Giao hàng API thành công! Đã nhận ${Number(result.deliveredQuantity || buyQty)} tài khoản.`, 'success');
+                this.sendTelegramOrderNotification({
+                    orderId,
+                    username,
+                    productName: product.name,
+                    quantity: buyQty,
+                    priceDisplay: this.formatMoney(result.totalAmount || totalAmount),
+                    date: new Date().toLocaleString('vi-VN')
+                });
+                this.appState.cartItem = null;
+                this.navigate('dashboard');
+            } catch (error) {
+                this.showToast(error.message, 'error');
+            } finally {
+                loading.classList.add('hidden');
+            }
+            return;
+        }
         const hasAutoFulfill = this.isAutoProduct(product);
         let balanceDebited = false;
         let orderCreated = false;
@@ -3820,6 +3926,178 @@ const app = {
         this.renderProviderSources();
     },
 
+    setProductProviderStatus: function (message, state = '') {
+        const status = document.getElementById('product-provider-status');
+        if (!status) return;
+        status.className = `product-provider-status${state ? ` is-${state}` : ''}`;
+        status.innerHTML = message;
+    },
+
+    populateProductProviderSources: function (selectedProviderId = '') {
+        const select = document.getElementById('product-provider-source');
+        if (!select) return '';
+        const picker = this.providerAdminState.productPicker;
+        const saved = picker.savedProduct || {};
+        const providers = (this.providerAdminState.providers || []).filter(item => item.enabled !== false);
+        const options = providers.map(provider => `
+            <option value="${this.escapeHtml(provider.id)}">${this.escapeHtml(provider.label)} — ${this.escapeHtml(provider.providerName)}</option>
+        `);
+        if (saved.providerId && !providers.some(item => item.id === saved.providerId)) {
+            options.unshift(`<option value="${this.escapeHtml(saved.providerId)}">${this.escapeHtml(saved.providerLabel || 'Nguồn API đã liên kết')} — cần mở lại Két API</option>`);
+        }
+        select.innerHTML = options.length > 0
+            ? options.join('')
+            : '<option value="">Chưa có nguồn API khả dụng</option>';
+        const preferred = selectedProviderId || saved.providerId || providers[0]?.id || '';
+        if (preferred) select.value = preferred;
+        picker.providerId = select.value || '';
+        return picker.providerId;
+    },
+
+    prepareProductProviderPicker: async function (savedProduct = null, force = false) {
+        const picker = this.providerAdminState.productPicker;
+        if (savedProduct) picker.savedProduct = savedProduct;
+        else if (force || !picker.savedProduct) picker.savedProduct = null;
+        const saved = picker.savedProduct || {};
+
+        try {
+            if (this.isProviderDemoMode()) {
+                if (!this.providerAdminState.demoInitialized) {
+                    this.providerAdminState.providers = this.getProviderDemoSources();
+                    this.providerAdminState.demoInitialized = true;
+                }
+            } else if ((force || this.providerAdminState.providers.length === 0) && this.getProviderAdminToken()) {
+                const data = await this.providerAdminRequest('/providers');
+                this.providerAdminState.providers = Array.isArray(data.providers) ? data.providers : [];
+                this.appState.providerSources = this.providerAdminState.providers;
+            }
+
+            const providerId = this.populateProductProviderSources(saved.providerId || picker.providerId);
+            if (!providerId) {
+                this.setProductProviderStatus(
+                    this.getProviderAdminToken()
+                        ? '<i class="fas fa-circle-exclamation"></i> Chưa có nguồn API. Hãy thêm key tại tab <strong>Nguồn API</strong> trước.'
+                        : '<i class="fas fa-lock"></i> Hãy mở Két API tại tab <strong>Nguồn API</strong>, sau đó quay lại chọn sản phẩm.',
+                    'error'
+                );
+                return;
+            }
+            await this.loadProductProviderCatalog(providerId, saved.providerProductId || '', force);
+        } catch (error) {
+            this.setProductProviderStatus(`<i class="fas fa-circle-exclamation"></i> ${this.escapeHtml(error.message)}`, 'error');
+        }
+    },
+
+    refreshProductProviderPicker: function () {
+        const providerId = document.getElementById('product-provider-source')?.value || '';
+        if (providerId) delete this.providerAdminState.productsByProvider[providerId];
+        void this.prepareProductProviderPicker(this.providerAdminState.productPicker.savedProduct, true);
+    },
+
+    adminProductProviderSourceChanged: function () {
+        const providerId = document.getElementById('product-provider-source')?.value || '';
+        const picker = this.providerAdminState.productPicker;
+        picker.providerId = providerId;
+        picker.selectedProduct = null;
+        picker.savedProduct = null;
+        void this.loadProductProviderCatalog(providerId, '', false);
+    },
+
+    loadProductProviderCatalog: async function (providerId, selectedProductId = '', force = false) {
+        const productSelect = document.getElementById('product-provider-product');
+        const picker = this.providerAdminState.productPicker;
+        if (!productSelect || !providerId) return;
+        picker.providerId = providerId;
+        picker.loading = true;
+        picker.error = '';
+        productSelect.disabled = true;
+        productSelect.innerHTML = '<option value="">Đang tải danh mục…</option>';
+        this.setProductProviderStatus('<i class="fas fa-spinner fa-spin"></i> Đang lấy sản phẩm và tồn kho mới nhất từ nguồn…');
+
+        try {
+            let products = [];
+            const cached = !force ? this.providerAdminState.productsByProvider[providerId] : null;
+            if (Array.isArray(cached?.products) && !cached.error) {
+                products = cached.products;
+            } else if (this.isProviderDemoMode()) {
+                const provider = this.providerAdminState.providers.find(item => item.id === providerId);
+                products = this.getProviderDemoProducts(provider?.type);
+            } else {
+                if (!this.getProviderAdminToken()) throw new Error('Két API đang khóa. Hãy mở két tại tab Nguồn API.');
+                const data = await this.providerAdminRequest(`/providers/${encodeURIComponent(providerId)}/products`);
+                products = Array.isArray(data.products) ? data.products : [];
+                this.providerAdminState.productsByProvider[providerId] = {
+                    loading: false,
+                    products,
+                    total: Number(data.total || products.length)
+                };
+            }
+            picker.products = products;
+            picker.loading = false;
+            this.renderProductProviderCatalog(selectedProductId);
+        } catch (error) {
+            picker.products = [];
+            picker.loading = false;
+            picker.error = error.message;
+            productSelect.innerHTML = '<option value="">Không tải được danh mục</option>';
+            this.setProductProviderStatus(`<i class="fas fa-circle-exclamation"></i> ${this.escapeHtml(error.message)}`, 'error');
+        } finally {
+            productSelect.disabled = false;
+        }
+    },
+
+    renderProductProviderCatalog: function (selectedProductId = '') {
+        const select = document.getElementById('product-provider-product');
+        if (!select) return;
+        const picker = this.providerAdminState.productPicker;
+        const saved = picker.savedProduct || {};
+        const products = Array.isArray(picker.products) ? picker.products : [];
+        const requestedId = String(selectedProductId || saved.providerProductId || '');
+        const rows = products.map(product => `
+            <option value="${this.escapeHtml(product.id)}">
+                ${this.escapeHtml(product.name)} — ${this.formatMoney(product.price)} — Kho ${Number(product.stock || 0).toLocaleString('vi-VN')}
+            </option>
+        `);
+        if (requestedId && !products.some(item => String(item.id) === requestedId)) {
+            rows.unshift(`<option value="${this.escapeHtml(requestedId)}">${this.escapeHtml(saved.providerProductName || `Sản phẩm ID ${requestedId}`)} — hiện không còn trong danh mục</option>`);
+        }
+        select.innerHTML = rows.length > 0 ? rows.join('') : '<option value="">Nguồn chưa có sản phẩm</option>';
+        if (requestedId) select.value = requestedId;
+        this.adminProductProviderProductChanged();
+    },
+
+    adminProductProviderProductChanged: function () {
+        const picker = this.providerAdminState.productPicker;
+        const productId = String(document.getElementById('product-provider-product')?.value || '');
+        let product = (picker.products || []).find(item => String(item.id) === productId) || null;
+        if (!product && String(picker.savedProduct?.providerProductId || '') === productId) {
+            product = {
+                id: productId,
+                name: picker.savedProduct.providerProductName || `Sản phẩm ID ${productId}`,
+                price: Number(picker.savedProduct.providerCost || 0),
+                stock: Number(picker.savedProduct.quantity || 0),
+                description: picker.savedProduct.providerProductDescription || ''
+            };
+        }
+        picker.selectedProduct = product;
+        if (!product) {
+            this.setProductProviderStatus('<i class="fas fa-box-open"></i> Nguồn hiện chưa có sản phẩm để liên kết.', 'error');
+            return;
+        }
+
+        const quantityInput = document.getElementById('product-quantity');
+        if (quantityInput) quantityInput.value = Number(product.stock || 0);
+        const creating = !document.getElementById('product-id')?.value;
+        const nameInput = document.getElementById('product-name');
+        const descInput = document.getElementById('product-desc');
+        if (creating && nameInput && !nameInput.value.trim()) nameInput.value = product.name || '';
+        if (creating && descInput && !descInput.value.trim() && product.description) descInput.value = product.description;
+        this.setProductProviderStatus(
+            `<i class="fas fa-circle-check"></i> <strong>${this.escapeHtml(product.name)}</strong> · Giá nguồn ${this.formatMoney(product.price)} · Kho ${Number(product.stock || 0).toLocaleString('vi-VN')}. Hãy nhập giá bán của bạn ở phía trên.`,
+            'ready'
+        );
+    },
+
     renderProviderSources: function (fallbackMessage = '') {
         const container = document.getElementById('provider-sources-list');
         if (!container) return;
@@ -4181,6 +4459,10 @@ const app = {
         this.populateAdminCategoryFilter();
         this.filterAdminProducts().forEach(p => {
             const categoryId = this.getProductCategory(p);
+            const deliveryText = this.isProviderProduct(p)
+                ? `API tự động · ${p.providerLabel || p.providerType || 'Nhà cung cấp'}`
+                : (this.isInventoryProduct(p) ? 'Tự động từ kho' : 'Admin cấp thủ công');
+            const deliveryColor = this.isAutoProduct(p) ? '#10b981' : 'var(--text-muted)';
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><img src="${this.escapeHtml(p.logoUrls && p.logoUrls.length > 0 ? p.logoUrls[0] : '')}" alt="logo" loading="lazy" decoding="async" style="width: 40px; height: 40px; object-fit: contain; background: rgba(255,255,255,0.1); border-radius: 5px;"></td>
@@ -4202,8 +4484,8 @@ const app = {
                 <td>
                     <div style="font-size: 0.85rem; color: var(--text-muted); max-width: 250px;">
                         <strong>Giao hàng:</strong>
-                        <span style="color:${this.isAutoProduct(p) ? '#10b981' : 'var(--text-muted)'};">
-                            ${this.isAutoProduct(p) ? 'Tự động từ kho' : 'Admin cấp thủ công'}
+                        <span style="color:${deliveryColor};">
+                            ${this.escapeHtml(deliveryText)}
                         </span>
                         <br>
                         <strong>Format:</strong> ${this.escapeHtml(p.format || '-')}
@@ -4213,7 +4495,7 @@ const app = {
                 </td>
                 <td>
                     <button class="btn-primary" style="padding: 5px 10px; font-size: 0.8rem;" onclick="app.adminEditProduct('${p.id}')">
-                        <i class="fas fa-edit"></i> ${this.isAutoProduct(p) ? 'Sửa & nhập kho' : 'Sửa'}
+                        <i class="fas fa-edit"></i> ${this.isInventoryProduct(p) ? 'Sửa & nhập kho' : (this.isProviderProduct(p) ? 'Sửa nguồn API' : 'Sửa')}
                     </button>
                     <button class="btn-outline" style="padding: 5px 10px; font-size: 0.8rem; margin-top: 5px; border-color: var(--danger); color: var(--danger);" onclick="app.adminDeleteProduct('${p.id}')">
                         <i class="fas fa-trash"></i> Xóa
@@ -4503,7 +4785,7 @@ const app = {
         const searchInput = document.getElementById('admin-inventory-search');
         const query = this.normalizeText(searchValue !== undefined ? searchValue : (searchInput?.value || ''));
         const inventoryData = this.appState.productInventory || {};
-        const autoProducts = (this.appState.products || []).filter(product => this.isAutoProduct(product));
+        const autoProducts = (this.appState.products || []).filter(product => this.isInventoryProduct(product));
         const valueUsage = new Map();
 
         autoProducts.forEach(product => {
@@ -4752,6 +5034,14 @@ const app = {
         this.toggleProductWarranty(false);
         // Reset nguồn hàng về thủ công
         document.getElementById('source-manual').checked = true;
+        this.providerAdminState.productPicker = {
+            providerId: '',
+            products: [],
+            selectedProduct: null,
+            savedProduct: null,
+            loading: false,
+            error: ''
+        };
         this.toggleProductSourceMode('manual');
         this.resetInventoryEditor();
         document.getElementById('product-modal').classList.remove('hidden');
@@ -4778,7 +5068,11 @@ const app = {
         document.getElementById('product-format').value = product.format || '';
         await this.loadProductInventoryEditor(product.id);
 
-        if (this.isAutoProduct(product)) {
+        if (this.isProviderProduct(product)) {
+            this.providerAdminState.productPicker.savedProduct = product;
+            document.getElementById('source-provider').checked = true;
+            this.toggleProductSourceMode('provider');
+        } else if (this.isInventoryProduct(product)) {
             document.getElementById('source-auto').checked = true;
             this.toggleProductSourceMode('inventory');
         } else {
@@ -4790,29 +5084,39 @@ const app = {
         document.getElementById('product-modal').style.display = 'flex';
     },
 
-    // Toggle hiển thị Thủ công / Kho giao tự động
+    // Toggle hiển thị Thủ công / Kho giao tự động / Nguồn API
     toggleProductSourceMode: function (mode) {
         const section = document.getElementById('inventory-config-section');
+        const providerSection = document.getElementById('provider-product-config-section');
         const manualLabel = document.getElementById('source-manual-label');
         const autoLabel = document.getElementById('source-auto-label');
+        const providerLabel = document.getElementById('source-provider-label');
         const quantityInput = document.getElementById('product-quantity');
         const quantityHelp = document.getElementById('product-quantity-help');
 
+        [manualLabel, autoLabel, providerLabel].forEach(label => {
+            if (!label) return;
+            label.style.border = '2px solid var(--card-border)';
+            label.style.background = 'transparent';
+        });
+        if (section) section.style.display = mode === 'inventory' ? 'block' : 'none';
+        if (providerSection) providerSection.style.display = mode === 'provider' ? 'block' : 'none';
+
         if (mode === 'inventory') {
-            section.style.display = 'block';
             autoLabel.style.border = '2px solid var(--accent)';
             autoLabel.style.background = 'rgba(0,240,255,0.1)';
-            manualLabel.style.border = '2px solid var(--card-border)';
-            manualLabel.style.background = 'transparent';
             quantityInput.readOnly = true;
             if (quantityHelp) quantityHelp.textContent = 'Kho tự động: số lượng được tính từ tài khoản đã nhập.';
             this.previewInventoryDraft();
+        } else if (mode === 'provider') {
+            providerLabel.style.border = '2px solid #8b5cf6';
+            providerLabel.style.background = 'rgba(139,92,246,0.12)';
+            quantityInput.readOnly = true;
+            if (quantityHelp) quantityHelp.textContent = 'Nguồn API: số lượng lấy từ tồn kho mới nhất của nhà cung cấp.';
+            void this.prepareProductProviderPicker(this.providerAdminState.productPicker.savedProduct);
         } else {
-            section.style.display = 'none';
             manualLabel.style.border = '2px solid var(--primary)';
             manualLabel.style.background = 'rgba(255,0,127,0.1)';
-            autoLabel.style.border = '2px solid var(--card-border)';
-            autoLabel.style.background = 'transparent';
             quantityInput.readOnly = false;
             if (quantityHelp) quantityHelp.textContent = 'Sản phẩm thủ công: admin tự nhập số lượng.';
         }
@@ -4851,10 +5155,21 @@ const app = {
         const logoUrl = document.getElementById('product-logo').value.trim();
         const desc = document.getElementById('product-desc').value.trim();
         const format = document.getElementById('product-format').value.trim();
-        const sourceMode = document.getElementById('source-auto').checked ? 'inventory' : 'manual';
+        const sourceMode = document.getElementById('source-provider')?.checked
+            ? 'provider'
+            : (document.getElementById('source-auto').checked ? 'inventory' : 'manual');
+        const providerId = document.getElementById('product-provider-source')?.value || '';
+        const providerProductId = document.getElementById('product-provider-product')?.value || '';
+        const providerRecord = this.providerAdminState.providers.find(item => item.id === providerId) || null;
+        const picker = this.providerAdminState.productPicker;
+        const providerProduct = (picker.products || []).find(item => String(item.id) === String(providerProductId))
+            || (String(picker.savedProduct?.providerProductId || '') === String(providerProductId)
+                ? picker.selectedProduct
+                : null);
 
         if (!name || !categoryId || !duration || isNaN(price) || !logoUrl
-            || (sourceMode === 'manual' && (isNaN(manualQuantity) || manualQuantity < 0))) {
+            || (sourceMode === 'manual' && (isNaN(manualQuantity) || manualQuantity < 0))
+            || (sourceMode === 'provider' && (!providerId || !providerProductId || !providerProduct))) {
             this.showToast("Vui lòng điền đầy đủ thông tin hợp lệ!", 'warning');
             return;
         }
@@ -4919,6 +5234,8 @@ const app = {
                 if (!inventoryResult.committed) throw new Error('Kho vừa thay đổi, vui lòng thử lưu lại.');
                 finalInventoryItems = this.normalizeInventoryItems(inventoryResult.snapshot.val());
                 quantity = finalInventoryItems.length;
+            } else if (sourceMode === 'provider') {
+                quantity = Math.max(0, Number(providerProduct.stock || 0));
             }
 
             const existingProduct = this.appState.products.find(product => product.id === productId);
@@ -4936,6 +5253,13 @@ const app = {
                 format,
                 sourceMode,
                 deliveryMode: sourceMode,
+                providerId: sourceMode === 'provider' ? providerId : null,
+                providerType: sourceMode === 'provider' ? (providerRecord?.type || picker.savedProduct?.providerType || '') : null,
+                providerLabel: sourceMode === 'provider' ? (providerRecord?.label || picker.savedProduct?.providerLabel || 'Nguồn API') : null,
+                providerProductId: sourceMode === 'provider' ? String(providerProduct.id) : null,
+                providerProductName: sourceMode === 'provider' ? String(providerProduct.name || name) : null,
+                providerProductDescription: sourceMode === 'provider' ? String(providerProduct.description || '') : null,
+                providerCost: sourceMode === 'provider' ? Number(providerProduct.price || 0) : null,
                 createdAt: existingProduct?.createdAt || firebase.database.ServerValue.TIMESTAMP,
                 updatedAt: firebase.database.ServerValue.TIMESTAMP
             };
@@ -4961,7 +5285,9 @@ const app = {
             loading.classList.add('hidden');
             this.showToast(sourceMode === 'inventory'
                 ? `Đã lưu sản phẩm và ${quantity} tài khoản trong kho.`
-                : (pid ? 'Cập nhật sản phẩm thành công!' : 'Thêm sản phẩm thành công!'), 'success');
+                : (sourceMode === 'provider'
+                    ? `Đã liên kết sản phẩm với ${providerRecord?.label || 'nguồn API'} — tồn ${quantity}.`
+                    : (pid ? 'Cập nhật sản phẩm thành công!' : 'Thêm sản phẩm thành công!')), 'success');
             this.closeAdminProductModal();
         } catch (error) {
             loading.classList.add('hidden');
@@ -6848,8 +7174,9 @@ const app = {
         return numberedLines.length > 0 ? numberedLines : [details];
     },
 
-    parseDeliveredAccount: function (rawValue, accountIndex) {
+    parseDeliveredAccount: function (rawValue, accountIndex, sourceRawValue = rawValue) {
         const raw = String(rawValue || '').trim();
+        const sourceRaw = String(sourceRawValue ?? rawValue ?? '');
         let parts = raw.split(/\s*\|\s*|\t+|\r?\n/).map(value => value.trim()).filter(Boolean);
         if (parts.length === 1 && raw.includes(':')) {
             const colonParts = raw.split(':').map(value => value.trim()).filter(Boolean);
@@ -6886,7 +7213,7 @@ const app = {
                 sensitive: false
             });
         }
-        return { raw, fields };
+        return { raw: sourceRaw || raw, parsedRaw: raw, fields };
     },
 
     getOrderTimelineState: function (order) {
@@ -6938,8 +7265,20 @@ const app = {
             return;
         }
 
-        const accounts = this.getOrderDeliveredAccounts(order)
-            .map((value, index) => this.parseDeliveredAccount(value, index));
+        const deliveredValues = this.getOrderDeliveredAccounts(order);
+        const providerRawSource = Array.isArray(order.deliveredRawAccounts)
+            ? order.deliveredRawAccounts
+            : Object.values(order.deliveredRawAccounts || {});
+        const providerRawValues = providerRawSource.map(value => {
+            if (typeof value === 'string') return value;
+            try {
+                return JSON.stringify(value);
+            } catch (_) {
+                return String(value ?? '');
+            }
+        });
+        const accounts = deliveredValues
+            .map((value, index) => this.parseDeliveredAccount(value, index, providerRawValues[index] || value));
         this._activeDeliveryAccounts = accounts;
         document.getElementById('account-delivery-title').textContent = order.productName || 'Tài khoản của bạn';
         document.getElementById('account-delivery-subtitle').textContent =
@@ -6988,6 +7327,17 @@ const app = {
                                 </div>
                             </label>
                         `).join('')}
+                    </div>
+                    <div class="delivery-source-note">
+                        <div class="delivery-source-note-heading">
+                            <span><i class="fas fa-code"></i> ${order.deliveryMode === 'provider' ? 'Dữ liệu gốc từ API' : 'Dữ liệu gốc khi giao hàng'}</span>
+                            <button type="button" class="btn-outline"
+                                onclick="app.copyDeliveryAccount(${accountIndex})">
+                                <i class="far fa-copy"></i> Sao chép bản gốc
+                            </button>
+                        </div>
+                        <code>${this.escapeHtml(account.raw)}</code>
+                        <small>Chuỗi này được giữ nguyên theo nguồn; hãy dùng nếu các ô phía trên bị tách chưa đúng.</small>
                     </div>
                 </article>
             `).join('');
