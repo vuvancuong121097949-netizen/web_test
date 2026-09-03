@@ -1,0 +1,173 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 485 125" role="img" aria-labelledby="logoTitle logoDesc">
+  <title id="logoTitle">Tài Khoản Xịn</title>
+  <desc id="logoDesc">Logo túi mua sắm nhiều màu với chữ sáng dành cho giao diện tối.</desc>
+
+  <style>
+    .logo-orbit {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: orbitTurn 14s linear infinite;
+    }
+
+    .logo-mark {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: markFloat 4.6s ease-in-out infinite;
+    }
+
+    .logo-shine {
+      animation: shineSweep 4.8s ease-in-out infinite;
+    }
+
+    .logo-orbit-particles {
+      transform-origin: 61px 66px;
+      animation: particleOrbit 7.5s linear infinite;
+    }
+
+    .logo-bag-ring {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: ringBreathe 3.2s ease-in-out infinite;
+    }
+
+    .logo-bag-dot {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: bagDotPulse 2.4s ease-in-out infinite;
+    }
+
+    .logo-spark {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: sparkPulse 2.8s ease-in-out infinite;
+    }
+
+    .logo-spark-two {
+      animation-delay: -1.4s;
+    }
+
+    .logo-underline {
+      animation: underlineFlow 3.8s linear infinite;
+    }
+
+    .logo-accent-word {
+      animation: accentWordGlow 3.6s ease-in-out infinite;
+    }
+
+    @keyframes orbitTurn {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes markFloat {
+      0%, 100% { transform: translateY(0) rotate(-0.7deg); }
+      50% { transform: translateY(-5px) rotate(1deg); }
+    }
+
+    @keyframes shineSweep {
+      0%, 52% { transform: translateX(-145px); opacity: 0; }
+      62% { opacity: 0.72; }
+      86%, 100% { transform: translateX(190px); opacity: 0; }
+    }
+
+    @keyframes particleOrbit {
+      to { transform: rotate(-360deg); }
+    }
+
+    @keyframes ringBreathe {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.07); opacity: 0.86; }
+    }
+
+    @keyframes bagDotPulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(0.78); opacity: 0.72; }
+    }
+
+    @keyframes sparkPulse {
+      0%, 100% { transform: scale(0.72) rotate(0); opacity: 0.35; }
+      50% { transform: scale(1.12) rotate(16deg); opacity: 1; }
+    }
+
+    @keyframes underlineFlow {
+      to { stroke-dashoffset: -180; }
+    }
+
+    @keyframes accentWordGlow {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.84; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .logo-orbit,
+      .logo-orbit-particles,
+      .logo-mark,
+      .logo-shine,
+      .logo-bag-ring,
+      .logo-bag-dot,
+      .logo-spark,
+      .logo-underline,
+      .logo-accent-word {
+        animation: none;
+      }
+    }
+  </style>
+
+  <defs>
+    <linearGradient id="bagGradient" x1="18" y1="28" x2="104" y2="110" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3154ff"/>
+      <stop offset="0.42" stop-color="#08c7e8"/>
+      <stop offset="0.73" stop-color="#e61fc9"/>
+      <stop offset="1" stop-color="#ff9f2f"/>
+    </linearGradient>
+    <linearGradient id="wordGradient" x1="360" y1="42" x2="472" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6f88ff"/>
+      <stop offset="0.48" stop-color="#22c8e5"/>
+      <stop offset="1" stop-color="#f04bd9"/>
+    </linearGradient>
+    <linearGradient id="orbitGradient" x1="5" y1="16" x2="118" y2="124" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6f88ff" stop-opacity="0.18"/>
+      <stop offset="0.45" stop-color="#20d3ef" stop-opacity="0.92"/>
+      <stop offset="0.72" stop-color="#f04bd9" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#6f88ff" stop-opacity="0.16"/>
+    </linearGradient>
+    <filter id="markShadow" x="-35%" y="-35%" width="170%" height="180%">
+      <feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#3154ff" flood-opacity="0.3"/>
+    </filter>
+    <filter id="wordShadow" x="-10%" y="-35%" width="120%" height="170%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.4" flood-color="#000814" flood-opacity="0.62"/>
+    </filter>
+    <clipPath id="bagClip">
+      <path d="M26 43 Q26 36 34 36 H91 Q99 36 100 44 L106 103 Q107 113 97 116 H25 Q15 113 17 103 L24 44 Q24 43 26 43Z"/>
+    </clipPath>
+  </defs>
+
+  <g transform="translate(7 4)">
+    <circle class="logo-orbit" cx="61" cy="66" r="54" fill="none" stroke="url(#orbitGradient)" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="24 13"/>
+    <g class="logo-orbit-particles">
+      <circle cx="61" cy="12" r="3.2" fill="#6f88ff"/>
+      <circle cx="111" cy="66" r="2.7" fill="#f04bd9"/>
+      <circle cx="26" cy="107" r="2.4" fill="#20d3ef"/>
+    </g>
+
+    <g class="logo-mark" filter="url(#markShadow)">
+      <path d="M39 39 V30 C39 16 49 8 62 8 C75 8 85 16 85 30 V39" fill="none" stroke="#dbe5ff" stroke-opacity="0.48" stroke-width="15" stroke-linecap="round"/>
+      <path d="M39 39 V30 C39 16 49 8 62 8 C75 8 85 16 85 30 V39" fill="none" stroke="#10172c" stroke-width="9" stroke-linecap="round"/>
+      <path d="M26 43 Q26 36 34 36 H91 Q99 36 100 44 L106 103 Q107 113 97 116 H25 Q15 113 17 103 L24 44 Q24 43 26 43Z" fill="url(#bagGradient)"/>
+      <circle class="logo-bag-ring" cx="61" cy="74" r="22" fill="none" stroke="#11182d" stroke-width="9"/>
+      <circle class="logo-bag-dot" cx="89" cy="55" r="5.5" fill="#11182d"/>
+      <g clip-path="url(#bagClip)">
+        <rect class="logo-shine" x="-90" y="22" width="34" height="115" rx="17" fill="#ffffff" opacity="0" transform="rotate(18 0 0)"/>
+      </g>
+    </g>
+
+    <path class="logo-spark" d="M109 23 L112 31 L120 34 L112 37 L109 45 L106 37 L98 34 L106 31Z" fill="#f04bd9"/>
+    <path class="logo-spark logo-spark-two" d="M17 14 L19 20 L25 22 L19 24 L17 30 L15 24 L9 22 L15 20Z" fill="#20d3ef"/>
+  </g>
+
+  <g font-family="Segoe UI, Arial, sans-serif" font-size="48" font-style="italic" filter="url(#wordShadow)">
+    <text x="132" y="82" fill="#f3f6ff" font-weight="800">Tài Khoản</text>
+    <text class="logo-accent-word" x="380" y="82" fill="url(#wordGradient)" font-weight="900">Xịn</text>
+  </g>
+
+  <path class="logo-underline" d="M136 101 H470" fill="none" stroke="url(#wordGradient)" stroke-width="3" stroke-linecap="round" stroke-dasharray="34 146" opacity="0.9"/>
+</svg>

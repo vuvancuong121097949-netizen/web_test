@@ -1,0 +1,1725 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tài Khoản Xịn - Mua Bán Tài Khoản Tự Động</title>
+    <meta name="description" content="Hệ thống bán tài khoản tự động chuyên nghiệp, uy tín, giao dịch nhanh chóng.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@700;800;900&family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=78">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <link rel="icon" type="image/png" href="https://i.ibb.co/cSw3Zt1t/logo-web.png">
+</head>
+
+<body>
+    <canvas id="ambient-network-canvas" aria-hidden="true"></canvas>
+    <div id="app">
+        <!-- Header -->
+        <header class="glass-header">
+            <div class="container header-container">
+                <a href="javascript:void(0)" class="logo" onclick="app.navigate('home');return false;">
+                    <img class="site-img-logo site-img-logo-light" src="assets/logo-motion.svg?v=9" alt="Tài Khoản Xịn">
+                    <img class="site-img-logo site-img-logo-dark" src="assets/logo-motion-dark.svg?v=2" alt="Tài Khoản Xịn">
+                </a>
+                <button type="button" class="mobile-utility-toggle" id="mobile-utility-toggle"
+                    onclick="app.toggleMobileUtilityMenu()" aria-label="Mở menu tiện ích"
+                    aria-controls="header-actions" aria-expanded="false">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="header-actions" id="header-actions">
+                    <a href="javascript:void(0)" id="nav-guest-1" class="header-login"
+                        onclick="app.navigate('login');app.closeMobileMenu();return false;">Đăng nhập</a>
+                    <a href="javascript:void(0)" id="nav-guest-2" class="btn-primary header-register"
+                        onclick="app.navigate('register');app.closeMobileMenu();return false;">Đăng ký</a>
+                    <a href="javascript:void(0)" id="nav-notifications" class="header-icon-btn hidden"
+                        onclick="app.navigate('notifications');app.closeMobileMenu();return false;" aria-label="Thông báo"><i
+                            class="fas fa-bell"></i> <span id="nav-notification-badge"
+                            class="badge hidden">0</span></a>
+                    <a href="javascript:void(0)" id="nav-user-1" class="header-login hidden"
+                        onclick="app.navigate('dashboard');app.closeMobileMenu();return false;" aria-label="Tài khoản"><i class="fas fa-user"></i>
+                        <span id="nav-user-email">Tài khoản</span></a>
+                    <a href="javascript:void(0)" id="nav-otp" class="header-login hidden"
+                        onclick="app.navigate('otp');app.closeMobileMenu();return false;" aria-label="Dịch vụ OTP"><i class="fas fa-mobile-alt"></i> OTP</a>
+                    <a href="javascript:void(0)" id="nav-deposit" class="btn-outline header-balance hidden"
+                        onclick="app.navigate('deposit');app.closeMobileMenu();return false;"><i class="fas fa-wallet"></i>
+                        <span id="nav-balance">0đ</span></a>
+                    <a href="javascript:void(0)" id="nav-admin" class="header-icon-btn hidden"
+                        onclick="app.navigate('admin');app.closeMobileMenu();return false;" aria-label="Quản trị"><i class="fas fa-user-shield"></i></a>
+                    <a href="javascript:void(0)" id="nav-user-2" class="header-login hidden"
+                        onclick="app.logout();return false;" aria-label="Đăng xuất">Đăng xuất</a>
+                    <button type="button" class="header-icon-btn" onclick="app.toggleTheme();return false;" id="theme-toggle-btn"
+                        title="Đổi giao diện Sáng/Tối" aria-label="Đổi giao diện Sáng/Tối"><i class="fas fa-moon"></i></button>
+                    <button class="header-cart-btn" type="button" aria-label="Xem sản phẩm"
+                        onclick="app.navigate('home');document.getElementById('products-section')?.scrollIntoView({behavior:'smooth'});">
+                        <i class="fas fa-shopping-cart"></i>
+                        <span id="header-cart-count">0</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="container">
+            <!-- Home View -->
+            <section id="view-home" class="view active">
+                <div class="home-layout">
+                    <section class="hero">
+                        <canvas id="hero-canvas"></canvas>
+                        <div class="hero-orb hero-orb-1"></div>
+                        <div class="hero-orb hero-orb-2"></div>
+                        <div class="hero-content">
+                            <h1>
+                                <span class="hero-heading-kicker">DỊCH VỤ SỐ</span><br>
+                                <span class="hero-feature-title" id="hero-typing-text"
+                                    aria-label="TÀI KHOẢN &amp; THUÊ OTP">TÀI KHOẢN &amp; THUÊ OTP</span>
+                            </h1>
+                        </div>
+
+                        <div class="hero-visual" aria-hidden="true">
+                            <img class="hero-bag-image" src="assets/hero-bag.png" alt="">
+                            <span class="app-bubble hero-brand-bubble bubble-netflix" title="Adobe">
+                                <img class="hero-brand-logo" src="https://i.ibb.co/mCHY4hph/adobe-logo.png" alt="">
+                            </span>
+                            <span class="app-bubble hero-brand-bubble bubble-spotify" title="Canva">
+                                <img class="hero-brand-logo" src="https://i.ibb.co/q3BdB8J1/canva-logo.png" alt="">
+                            </span>
+                            <span class="app-bubble hero-brand-bubble bubble-youtube" title="ChatGPT">
+                                <img class="hero-brand-logo" src="https://i.ibb.co/ks9JnkBc/chatgpt-logo.png" alt="">
+                            </span>
+                            <span class="app-bubble hero-brand-bubble bubble-canva" title="Gemini">
+                                <img class="hero-brand-logo" src="https://i.ibb.co/nKYxFT1/GEMINI-LOGO.png" alt="">
+                            </span>
+                            <span class="app-bubble hero-brand-bubble bubble-ai" title="CapCut">
+                                <img class="hero-brand-logo" src="https://i.ibb.co/5WWRJF94/capcut-logo.png" alt="">
+                            </span>
+                            <span class="app-bubble hero-brand-bubble bubble-office" title="Office 365">
+                                <img class="hero-brand-logo"
+                                    src="https://upload.wikimedia.org/wikipedia/commons/0/0e/Microsoft_365_%282022%29.svg" alt="">
+                            </span>
+                        </div>
+                    </section>
+
+                    <aside class="home-sidebar" aria-label="Tổng quan dịch vụ">
+                        <div class="popular-services-card">
+                            <div class="home-card-title">
+                                <h2>Dịch vụ phổ biến</h2>
+                                <button type="button" onclick="document.getElementById('products-section').scrollIntoView({behavior:'smooth'})">Xem tất cả</button>
+                            </div>
+                            <div id="home-popular-list" class="home-popular-list">
+                                <!-- JS injected -->
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+
+                <div class="service-discovery-row">
+                    <section class="otp-spotlight" aria-label="Dịch vụ OTP">
+                        <div class="otp-spotlight-heading">
+                            <span class="otp-spotlight-icon"><i class="fas fa-comment-dots"></i></span>
+                            <span class="otp-spotlight-badge">DỊCH VỤ RIÊNG</span>
+                        </div>
+                        <strong>Thuê số OTP</strong>
+                        <small>Tự động, nhận mã nhanh</small>
+                        <button type="button" onclick="app.navigate('otp')">
+                            Thuê ngay <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </section>
+                </div>
+
+                <!-- Banner Quảng Cáo -->
+                <div id="promo-banners" class="promo-banners-container">
+                    <!-- JS injected -->
+                </div>
+
+                <div id="products-section" class="products-section">
+                    <div class="home-section-bar">
+                        <div>
+                            <h2>Tất cả sản phẩm</h2>
+                            <p>Tìm nhanh theo danh mục, nguồn giao và mức giá phù hợp</p>
+                        </div>
+                        <button type="button" onclick="app.resetProductFilters(true)">Đặt lại bộ lọc</button>
+                    </div>
+
+                    <!-- Thanh tìm kiếm sản phẩm -->
+                    <div class="product-search-bar" id="product-search-bar">
+                        <div class="psb-inner">
+                            <i class="fas fa-search psb-icon"></i>
+                            <input
+                                type="text"
+                                id="product-search-input"
+                                class="psb-input"
+                                placeholder="Tìm kiếm sản phẩm..."
+                                oninput="app.searchProducts(this.value)"
+                                autocomplete="off"
+                            >
+                            <button class="psb-clear hidden" id="psb-clear-btn" onclick="app.clearProductSearch()" title="Xóa tìm kiếm">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="psb-result-count" id="psb-result-count"></div>
+                    </div>
+
+                    <div id="product-list" class="product-grid">
+                        <!-- Products will be injected here via JS -->
+                    </div>
+                    <div id="product-empty-search" class="product-empty-search hidden">
+                        <i class="fas fa-search"></i>
+                        <p id="product-empty-message">Chưa có sản phẩm phù hợp với bộ lọc này.</p>
+                        <span id="psb-keyword" class="hidden"></span>
+                        <button class="btn-outline" onclick="app.resetProductFilters(false)">Xem tất cả sản phẩm</button>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- Login View -->
+            <section id="view-login" class="view">
+                <div class="auth-container glass-card">
+                    <h2>Đăng Nhập</h2>
+                    <p class="auth-subtitle">Chào mừng bạn quay trở lại Tài Khoản Xịn</p>
+                    <form id="login-form" onsubmit="app.handleLogin(event)">
+                        <div class="form-group">
+                            <label for="login-username"><i class="fas fa-user"></i> Tên đăng nhập</label>
+                            <input type="text" id="login-username" required placeholder="Nhập tên đăng nhập">
+                        </div>
+                        <div class="form-group">
+                            <label for="login-password"><i class="fas fa-lock"></i> Mật khẩu</label>
+                            <input type="password" id="login-password" required placeholder="Nhập mật khẩu">
+                        </div>
+                        <div id="login-error" class="error-msg"></div>
+                        <div style="text-align: right; margin-bottom: 15px;">
+                            <a href="javascript:void(0)" onclick="app.navigate('forgot')"
+                                style="color: var(--accent); font-size: 0.9rem;">Quên mật khẩu?</a>
+                        </div>
+                        <button type="submit" class="btn-primary btn-full">Đăng Nhập</button>
+                    </form>
+                    <p class="auth-switch">Chưa có tài khoản? <a href="javascript:void(0)"
+                            onclick="app.navigate('register')">Đăng ký
+                            ngay</a></p>
+                </div>
+            </section>
+
+            <!-- Register View -->
+            <section id="view-register" class="view">
+                <div class="auth-container glass-card">
+                    <h2>Đăng Ký</h2>
+                    <p class="auth-subtitle">Tạo tài khoản để bắt đầu mua sắm</p>
+                    <form id="register-form" onsubmit="app.handleRegister(event)">
+                        <div class="form-group">
+                            <label for="reg-email"><i class="fas fa-envelope"></i> Email của bạn</label>
+                            <input type="email" id="reg-email" required placeholder="Nhập địa chỉ email hợp lệ">
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-username"><i class="fas fa-user"></i> Tên đăng nhập</label>
+                            <input type="text" id="reg-username" required placeholder="Chọn tên đăng nhập">
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-password"><i class="fas fa-lock"></i> Mật khẩu</label>
+                            <input type="password" id="reg-password" required placeholder="Tạo mật khẩu">
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-password-confirm"><i class="fas fa-lock"></i> Xác nhận mật khẩu</label>
+                            <input type="password" id="reg-password-confirm" required placeholder="Nhập lại mật khẩu">
+                        </div>
+                        <div id="reg-error" class="error-msg"></div>
+                        <button type="submit" class="btn-primary btn-full">Đăng Ký</button>
+                    </form>
+                    <p class="auth-switch">Đã có tài khoản? <a href="javascript:void(0)"
+                            onclick="app.navigate('login')">Đăng nhập</a>
+                    </p>
+                </div>
+            </section>
+
+            <!-- Forgot Password View -->
+            <section id="view-forgot" class="view">
+                <div class="auth-container glass-card">
+                    <h2>Quên Mật Khẩu</h2>
+                    <p class="auth-subtitle">Khôi phục quyền truy cập Tài Khoản Xịn</p>
+                    <!-- Step 1: Request Code -->
+                    <form id="forgot-step1-form" onsubmit="app.requestPasswordReset(event)">
+                        <div class="form-group">
+                            <label for="forgot-username"><i class="fas fa-user"></i> Tên đăng nhập</label>
+                            <input type="text" id="forgot-username" required placeholder="Nhập tên đăng nhập của bạn">
+                        </div>
+                        <div id="forgot-step1-error" class="error-msg"></div>
+                        <button type="submit" class="btn-primary btn-full" id="btn-request-code">Nhận Mã Xác
+                            Nhận</button>
+                    </form>
+
+                    <!-- Step 2: Enter Code & New Password (Hidden initially) -->
+                    <form id="forgot-step2-form" class="hidden" onsubmit="app.handleForgot(event)">
+                        <div class="form-group">
+                            <label for="forgot-code"><i class="fas fa-key"></i> Mã xác nhận (Đã gửi vào Email)</label>
+                            <input type="text" id="forgot-code" required placeholder="Nhập mã xác nhận">
+                        </div>
+                        <div class="form-group">
+                            <label for="forgot-new-password"><i class="fas fa-lock"></i> Mật khẩu mới</label>
+                            <input type="password" id="forgot-new-password" required placeholder="Nhập mật khẩu mới">
+                        </div>
+                        <div id="forgot-error" class="error-msg"></div>
+                        <button type="submit" class="btn-primary btn-full">Đổi Mật Khẩu</button>
+                    </form>
+                    <p class="auth-switch">Nhớ mật khẩu? <a href="#" onclick="app.navigate('login')">Đăng nhập</a></p>
+                </div>
+            </section>
+
+            <!-- Checkout View -->
+            <section id="view-checkout" class="view">
+                <div class="checkout-container">
+                    <div class="checkout-header text-center">
+                        <h2>Thanh Toán Đơn Hàng</h2>
+                        <p>Vui lòng chuyển khoản với nội dung bên dưới để hệ thống duyệt tự động</p>
+                    </div>
+
+                    <div class="checkout-grid">
+                        <div class="order-summary glass-card">
+                            <h3>Thông tin sản phẩm</h3>
+                            <div id="checkout-product-details" class="product-details-box">
+                                <!-- JS injected -->
+                            </div>
+                        </div>
+
+                        <div class="payment-info glass-card border-glow" style="text-align: center;">
+                            <h3 style="margin-bottom: 20px;"><i class="fas fa-wallet"></i> Thanh toán bằng Số dư</h3>
+
+                            <div
+                                style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 10px; margin-bottom: 20px; border: 1px solid var(--card-border);">
+                                <div
+                                    style="display: flex; justify-content: space-between; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
+                                    <span style="color: var(--text-muted);">Tổng tiền:</span>
+                                    <span class="value text-price font-bold" id="checkout-price"
+                                        style="font-size: 1.2rem;">0đ</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="color: var(--text-muted);">Số dư hiện tại:</span>
+                                    <span class="value font-bold" id="checkout-user-balance"
+                                        style="font-size: 1.2rem; color: #2ecc71;">0đ</span>
+                                </div>
+                            </div>
+
+                            <div id="checkout-warning"
+                                style="display: none; color: var(--warning); margin-bottom: 15px; font-size: 0.9rem;">
+                                <i class="fas fa-exclamation-triangle"></i> Số dư không đủ! Bạn cần nạp thêm tiền.
+                            </div>
+
+                            <div class="payment-action" style="display: flex; flex-direction: column; gap: 10px;">
+                                <button class="btn-primary btn-full btn-glow" id="btn-pay-balance"
+                                    onclick="app.payWithBalance()">
+                                    Xác Nhận Thanh Toán
+                                </button>
+                                <button class="btn-outline btn-full" onclick="app.navigate('deposit')">
+                                    Nạp Thêm Tiền
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Deposit View -->
+            <section id="view-deposit" class="view">
+                <div class="checkout-container">
+                    <div class="checkout-header text-center">
+                        <h2>Nạp Tiền Vào Số Dư</h2>
+                        <p>Vui lòng chuyển khoản với nội dung bên dưới để được cộng số dư tự động (hoặc admin duyệt)</p>
+                    </div>
+
+                    <div class="checkout-grid">
+                        <!-- Cột trái: Thông tin tài khoản & Nhập số tiền -->
+                        <div class="payment-info glass-card border-glow">
+                            <h3 style="display: flex; align-items: center; gap: 10px;"><i
+                                    class="fas fa-university text-gradient"></i> Thông tin chuyển khoản</h3>
+                            <div class="bank-details" style="display: flex; flex-direction: column; gap: 12px;">
+                                <div class="bank-item"
+                                    style="padding: 15px; background: rgba(0,0,0,0.3); border-radius: 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 5px;">
+                                    <span class="label" style="color: var(--text-muted); font-size: 0.9rem;">Ngân
+                                        hàng</span>
+                                    <div class="value font-bold" style="font-size: 1.1rem; color: white;">MB Bank</div>
+                                </div>
+                                <div class="bank-item"
+                                    style="padding: 15px; background: rgba(0,0,0,0.3); border-radius: 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 5px;">
+                                    <span class="label" style="color: var(--text-muted); font-size: 0.9rem;">Số tài
+                                        khoản</span>
+                                    <div
+                                        style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                        <span class="value text-gradient font-bold text-lg"
+                                            style="letter-spacing: 1px;">346641789567</span>
+                                        <button class="btn-icon" onclick="app.copyText('346641789567')"
+                                            title="Sao chép"><i class="far fa-copy"></i></button>
+                                    </div>
+                                </div>
+                                <div class="bank-item"
+                                    style="padding: 15px; background: rgba(0,0,0,0.3); border-radius: 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 5px;">
+                                    <span class="label" style="color: var(--text-muted); font-size: 0.9rem;">Chủ tài
+                                        khoản</span>
+                                    <div class="value font-bold" style="font-size: 1.1rem; color: white;">Vũ Văn Cường
+                                    </div>
+                                </div>
+
+                                <!-- Phần nhập số tiền khi chưa có yêu cầu -->
+                                <div id="deposit-input-group"
+                                    style="padding: 15px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 10px; margin-top: 10px; display: block;">
+                                    <label
+                                        style="color: var(--accent); font-weight: 600; margin-bottom: 8px; display: block;">Số
+                                        tiền cần nạp:</label>
+                                    <input type="number" id="deposit-amount-input"
+                                        placeholder="Nhập số tiền (VD: 50000)"
+                                        style="padding: 12px; border-radius: 8px; border: 1px solid var(--primary); background: rgba(0,0,0,0.5); color: white; width: 100%; font-size: 1.1rem;"
+                                        oninput="app.validateDepositAmount()">
+                                    <div class="deposit-quick-amounts" aria-label="Chọn nhanh số tiền nạp">
+                                        <button type="button" class="deposit-quick-btn" data-amount="20000"
+                                            onclick="app.setDepositAmount(20000)">20K</button>
+                                        <button type="button" class="deposit-quick-btn" data-amount="50000"
+                                            onclick="app.setDepositAmount(50000)">50K</button>
+                                        <button type="button" class="deposit-quick-btn" data-amount="100000"
+                                            onclick="app.setDepositAmount(100000)">100K</button>
+                                        <button type="button" class="deposit-quick-btn" data-amount="200000"
+                                            onclick="app.setDepositAmount(200000)">200K</button>
+                                        <button type="button" class="deposit-quick-btn" data-amount="500000"
+                                            onclick="app.setDepositAmount(500000)">500K</button>
+                                    </div>
+                                    <div id="deposit-min-warning"
+                                        style="color: var(--danger); font-size: 0.85rem; margin-top: 8px; display: none;">
+                                        <i class="fas fa-exclamation-triangle"></i> Số tiền nạp tối thiểu là 10.000đ
+                                    </div>
+                                </div>
+
+                                <!-- Phần nội dung và số tiền sau khi đã tạo yêu cầu -->
+                                <div id="deposit-memo-group"
+                                    style="display: none; padding: 15px; background: rgba(16, 185, 129, 0.15); border: 1px dashed var(--success); border-radius: 10px; flex-direction: column; gap: 5px; margin-top: 10px;">
+                                    <span class="label" style="color: var(--text-muted); font-size: 0.9rem;">Nội dung
+                                        chuyển khoản (BẮT BUỘC ĐÚNG)</span>
+                                    <div
+                                        style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                        <span class="value font-bold" id="deposit-content"
+                                            style="font-size: 1.3rem; color: var(--success); letter-spacing: 1px;">...</span>
+                                        <button class="btn-icon"
+                                            onclick="app.copyText(document.getElementById('deposit-content').innerText)"
+                                            title="Sao chép"><i class="far fa-copy"></i></button>
+                                    </div>
+                                </div>
+
+                                <div id="deposit-amount-display-group"
+                                    style="display: none; padding: 15px; background: rgba(255, 140, 0, 0.15); border: 1px dashed var(--secondary); border-radius: 10px; flex-direction: column; gap: 5px;">
+                                    <span class="label" style="color: var(--text-muted); font-size: 0.9rem;">Số tiền
+                                        chính xác</span>
+                                    <div
+                                        style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                        <span class="value font-bold text-price" id="deposit-amount-display"
+                                            style="font-size: 1.3rem;">...</span>
+                                        <button class="btn-icon"
+                                            onclick="app.copyText(app.appState.currentDepositAmount.toString())"
+                                            title="Sao chép"><i class="far fa-copy"></i></button>
+                                    </div>
+                                </div>
+                                <div id="deposit-countdown-box" class="deposit-countdown-box hidden">
+                                    <span><i class="fas fa-hourglass-half"></i> Thời gian thanh toán còn lại</span>
+                                    <strong id="deposit-countdown-value">15:00</strong>
+                                </div>
+                            </div>
+
+                            <div class="payment-action" id="deposit-action-group" style="margin-top: 20px;">
+                                <button class="btn-primary btn-full btn-glow" id="btn-confirm-deposit"
+                                    onclick="app.createDepositRequest()" disabled
+                                    style="font-size: 1.1rem; padding: 14px;">
+                                    <i class="fas fa-check-circle"></i> Xác Nhận Tạo Mã QR
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Cột phải: Mã QR -->
+                        <div class="payment-info glass-card border-glow"
+                            style="display: flex; flex-direction: column; align-items: center; justify-content: flex-start; text-align: center;">
+                            <h3
+                                style="display: flex; align-items: center; gap: 10px; align-self: flex-start; width: 100%;">
+                                <i class="fas fa-qrcode text-gradient"></i> Quét mã thanh toán
+                            </h3>
+
+                            <!-- Trạng thái chờ tạo QR -->
+                            <div id="qr-empty-state"
+                                style="padding: 40px 20px; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; flex-grow: 1; justify-content: center;">
+                                <i class="fas fa-qrcode"
+                                    style="font-size: 5rem; opacity: 0.2; margin-bottom: 20px;"></i>
+                                <p>Vui lòng nhập số tiền và bấm <strong style="color: white;">Xác Nhận</strong> bên trái
+                                    để tạo mã QR nạp tiền.</p>
+                            </div>
+
+                            <!-- Trạng thái có QR -->
+                            <div id="deposit-qr-container"
+                                style="display: none; width: 100%; flex-direction: column; align-items: center; margin-top: 10px;">
+                                <!-- Khung trắng ôm sát mã QR -->
+                                <div class="qr-tilt-card"
+                                    style="background: white; border-radius: 16px; padding: 15px; box-shadow: 0 5px 25px rgba(0,0,0,0.5); width: 100%; max-width: 350px;">
+                                    <img id="deposit-qr-img" src="" alt="Mã QR Nạp Tiền"
+                                        style="width: 100%; height: auto; display: none; object-fit: contain;">
+                                    <div id="deposit-qr-loading"
+                                        style="display: flex; flex-direction: column; align-items: center; padding: 60px 0;">
+                                        <i class="fas fa-spinner fa-spin"
+                                            style="font-size: 2.5rem; color: var(--primary);"></i>
+                                        <p style="color: #333; margin-top: 15px; font-weight: bold;">Đang tạo mã QR...
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div style="margin-top: 25px; width: 100%;">
+                                    <p
+                                        style="color: var(--success); font-weight: bold; font-size: 1.1rem; margin-bottom: 5px;">
+                                        <i class="fas fa-check-circle"></i> Đã tạo yêu cầu!
+                                    </p>
+                                    <p style="color: var(--text-main); font-size: 0.95rem; margin-bottom: 20px;">Quét mã
+                                        hoặc chuyển khoản thủ công bên trái.</p>
+                                    <button class="btn-outline" style="width: 100%; max-width: 250px;"
+                                        onclick="app.resetDeposit()">Tạo yêu cầu mới</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- OTP View -->
+            <section id="view-otp" class="view">
+                <div class="otp-shell">
+                    <div class="checkout-header text-center otp-hero-header">
+                        <span class="badge">OTP tự động</span>
+                        <h2>Dịch Vụ Thuê Số OTP</h2>
+                        <p>Chọn dịch vụ bên dưới để thuê số nhận OTP tự động bằng Số dư</p>
+                    </div>
+
+                    <div class="otp-toolbar">
+                        <div class="otp-field">
+                            <label for="otp-network-select"><i class="fas fa-signal"></i> Nhà mạng</label>
+                            <select id="otp-network-select">
+                                <option value="">Ngẫu nhiên</option>
+                                <option value="Viettel">Viettel</option>
+                                <option value="Vina">Vinaphone</option>
+                                <option value="Mobi">Mobifone</option>
+                                <option value="VNMB">Vietnamobile</option>
+                                <option value="ITelecom">ITelecom</option>
+                            </select>
+                        </div>
+                        <div class="otp-field">
+                            <label for="otp-prefix-input"><i class="fas fa-mobile-alt"></i> Đầu số</label>
+                            <input id="otp-prefix-input" type="text" inputmode="numeric" maxlength="10"
+                                placeholder="03...xxx"
+                                oninput="this.value=this.value.replace(/\D/g,'')">
+                        </div>
+                    </div>
+
+                    <!-- OTP Pending Bar (compact, luôn ở trên danh sách app) -->
+                    <div id="otp-active-request" class="hidden">
+                        <!-- Rendered by renderOTPPendingBar() -->
+                    </div>
+                    <!-- OTP Search -->
+                    <div class="otp-search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="otp-search-input" placeholder="Tìm kiếm ứng dụng..."
+                            onkeyup="app.searchOTP()">
+                    </div>
+
+                    <!-- Apps List -->
+                    <div id="otp-apps-container" class="otp-compact-grid">
+                        <!-- JS Injected -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Dashboard View -->
+            <section id="view-dashboard" class="view">
+                <div class="dashboard-container">
+                    <div class="dashboard-header">
+                        <h2>Tài khoản của tôi</h2>
+                        <p>Xin chào, <span id="user-display-name" class="text-gradient font-bold"></span>!</p>
+                    </div>
+                    <div class="dashboard-layout">
+                        <!-- Sidebar Nav -->
+                        <div class="dashboard-sidebar">
+                            <button class="dash-nav-item active" onclick="app.scrollDashSection('section-orders',this)"><i
+                                    class="fas fa-shopping-bag"></i> Đơn hàng</button>
+                            <button class="dash-nav-item" onclick="app.scrollDashSection('section-otp',this)"><i
+                                    class="fas fa-mobile-alt"></i> Lịch sử OTP</button>
+                            <button class="dash-nav-item" onclick="app.scrollDashSection('section-deposits',this)"><i
+                                    class="fas fa-wallet"></i> Nạp tiền</button>
+                            <button class="dash-nav-item" onclick="app.scrollDashSection('section-settings',this)"><i
+                                    class="fas fa-cog"></i> Thiết lập</button>
+                        </div>
+                        <!-- Main Content -->
+                        <div>
+                            <div class="dashboard-content glass-card" id="section-settings"
+                                style="margin-bottom: 20px;">
+                                <h3>Thiết lập tài khoản</h3>
+                                <div class="form-group" style="max-width: 400px; margin-top: 15px;">
+                                    <label for="profile-email"><i class="fas fa-envelope"></i> Email bảo mật</label>
+                                    <div style="display: flex; gap: 10px;">
+                                        <input type="email" id="profile-email"
+                                            placeholder="Nhập email của bạn (để khôi phục MK)">
+                                        <button class="btn-primary" onclick="app.updateProfileEmail()">Lưu</button>
+                                    </div>
+                                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">Thêm email
+                                        để có
+                                        thể sử dụng chức năng Quên mật khẩu.</p>
+                                </div>
+                            </div>
+
+                            <div class="dashboard-content glass-card" id="section-orders">
+                                <h3>Lịch sử mua hàng & Tài khoản đã cấp</h3>
+                                <div class="table-responsive">
+                                    <table class="orders-table">
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Mã ĐH</th>
+                                                <th>Sản phẩm</th>
+                                            <th>Thời hạn</th>
+                                            <th>Số tiền</th>
+                                            <th>Ngày mua</th>
+                                            <th>Bảo hành</th>
+                                                <th>Trạng thái</th>
+                                                <th>Thông tin tài khoản</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="orders-list"></tbody>
+                                    </table><div id="pagbar-orders"></div>
+                                </div>
+                                <div id="no-orders-msg" class="empty-state hidden">
+                                    <i class="fas fa-box-open"></i>
+                                    <p>Bạn chưa mua sản phẩm nào.</p>
+                                    <button class="btn-primary" onclick="app.navigate('home')">Mua ngay</button>
+                                </div>
+                            </div>
+
+                            <div class="dashboard-content glass-card" id="section-otp" style="margin-top: 20px;">
+                                <h3>Lịch sử thuê OTP</h3>
+                                <div class="table-responsive">
+                                    <table class="orders-table">
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Ngày thuê</th>
+                                                <th>Dịch vụ</th>
+                                                <th>Số ĐT</th>
+                                                <th>Giá</th>
+                                                <th>Trạng thái</th>
+                                                <th>Mã OTP</th>
+                                                <th>Hành động</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="otp-history-list"></tbody>
+                                    </table><div id="pagbar-otp"></div>
+                                </div>
+                                <div id="no-otp-history-msg" class="empty-state hidden">
+                                    <i class="fas fa-mobile-alt"></i>
+                                    <p>Bạn chưa thuê số điện thoại nào.</p>
+                                    <button class="btn-outline" onclick="app.navigate('otp')"
+                                        style="margin-top: 10px;">Thuê
+                                        ngay</button>
+                                </div>
+                            </div>
+
+                            <div class="dashboard-content glass-card" id="section-deposits" style="margin-top: 20px;">
+                                <h3>Lịch sử Nạp tiền</h3>
+                                <div class="table-responsive">
+                                    <table class="orders-table">
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Thời gian</th>
+                                                <th>Mã GD (Memo)</th>
+                                                <th>Số tiền nạp</th>
+                                                <th>Trạng thái</th>
+                                                <th>Hành động</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="deposit-history-list"></tbody>
+                                    </table><div id="pagbar-deposits"></div>
+                                </div>
+                                <div id="no-deposit-history-msg" class="empty-state hidden">
+                                    <i class="fas fa-wallet"></i>
+                                    <p>Bạn chưa có yêu cầu nạp tiền nào.</p>
+                                    <button class="btn-outline" onclick="app.navigate('deposit')"
+                                        style="margin-top: 10px;">Nạp
+                                        tiền ngay</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Notifications View -->
+            <section id="view-notifications" class="view">
+                <div class="dashboard-container">
+                    <div class="dashboard-header">
+                        <h2><i class="fas fa-bell text-gradient"></i> Thông báo & Sự kiện</h2>
+                        <p>Cập nhật tin tức mới nhất và hướng dẫn từ hệ thống.</p>
+                    </div>
+
+                    <div id="notifications-list"
+                        style="display: flex; flex-direction: column; gap: 15px; margin-top: 20px;">
+                        <!-- JS Injected -->
+                    </div>
+
+                    <div id="no-notifications-msg" class="empty-state hidden">
+                        <i class="fas fa-box-open"></i>
+                        <p>Bạn chưa có thông báo nào.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Admin View -->
+            <section id="view-admin" class="view">
+                <div class="dashboard-container">
+                    <div class="dashboard-header"
+                        style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px;margin-bottom:20px;">
+                        <div>
+                            <h2 style="color:var(--warning);"><i class="fas fa-user-shield"></i> Quản Trị Hệ Thống</h2>
+                            <p>Tổng quan và quản lý toàn bộ hệ thống.</p>
+                        </div>
+                        <button class="btn-outline" style="border-color:#10b981;color:#10b981;"
+                            onclick="app.exportDatabaseBackup()">
+                            <i class="fas fa-download"></i> Backup
+                        </button>
+                    </div>
+                    <!-- Stats Cards -->
+                    <div class="admin-stats-grid">
+                        <div class="admin-stat-card">
+                            <div class="admin-stat-icon green"><i class="fas fa-chart-line"></i></div>
+                            <div class="admin-stat-info">
+                                <div class="admin-stat-value" id="stat-today-revenue">0đ</div>
+                                <div class="admin-stat-label">Doanh thu hôm nay</div>
+                            </div>
+                        </div>
+                        <div class="admin-stat-card">
+                            <div class="admin-stat-icon orange"><i class="fas fa-clock"></i></div>
+                            <div class="admin-stat-info">
+                                <div class="admin-stat-value" id="stat-pending-orders">0</div>
+                                <div class="admin-stat-label">Đơn chờ duyệt</div>
+                            </div>
+                        </div>
+                        <div class="admin-stat-card">
+                            <div class="admin-stat-icon blue"><i class="fas fa-wallet"></i></div>
+                            <div class="admin-stat-info">
+                                <div class="admin-stat-value" id="stat-pending-deposits">0</div>
+                                <div class="admin-stat-label">Nạp tiền chờ duyệt</div>
+                            </div>
+                        </div>
+                        <div class="admin-stat-card">
+                            <div class="admin-stat-icon pink"><i class="fas fa-users"></i></div>
+                            <div class="admin-stat-info">
+                                <div class="admin-stat-value" id="stat-total-users">0</div>
+                                <div class="admin-stat-label">Tổng thành viên</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Tabs -->
+                    <label class="admin-mobile-tab-select" for="admin-mobile-tab-select">
+                        <span><i class="fas fa-layer-group"></i> Khu vực quản trị</span>
+                        <select id="admin-mobile-tab-select"
+                            onchange="app.switchAdminTab(this.value, document.querySelector('.admin-tab-btn[data-admin-tab=&quot;' + this.value + '&quot;]'))">
+                            <option value="overview">Tổng quan</option>
+                            <option value="orders">Đơn hàng</option>
+                            <option value="deposits">Nạp tiền</option>
+                            <option value="products">Sản phẩm</option>
+                            <option value="inventory">Kho tài khoản</option>
+                            <option value="providers">Nguồn API</option>
+                            <option value="users">Thành viên</option>
+                            <option value="chat">Chat hỗ trợ</option>
+                            <option value="settings">Cài đặt</option>
+                        </select>
+                    </label>
+                    <div class="admin-tabs">
+                        <button class="admin-tab-btn active" data-admin-tab="overview" onclick="app.switchAdminTab('overview',this)"><i
+                                class="fas fa-chart-bar"></i> Tổng quan</button>
+                        <button class="admin-tab-btn" data-admin-tab="orders" onclick="app.switchAdminTab('orders',this)"><i
+                                class="fas fa-shopping-bag"></i> Đơn hàng <span class="tab-badge"
+                                id="tab-badge-orders">0</span></button>
+                        <button class="admin-tab-btn" data-admin-tab="deposits" onclick="app.switchAdminTab('deposits',this)"><i
+                                class="fas fa-money-bill-wave"></i> Nạp tiền <span class="tab-badge"
+                                id="tab-badge-deposits">0</span></button>
+                        <button class="admin-tab-btn" data-admin-tab="products" onclick="app.switchAdminTab('products',this)"><i
+                                class="fas fa-box"></i> Sản phẩm</button>
+                        <button class="admin-tab-btn" data-admin-tab="inventory" onclick="app.switchAdminTab('inventory',this)"><i
+                                class="fas fa-boxes-stacked"></i> Kho tài khoản</button>
+                        <button class="admin-tab-btn" data-admin-tab="providers" onclick="app.switchAdminTab('providers',this)"><i
+                                class="fas fa-shield-halved"></i> Nguồn API</button>
+                        <button class="admin-tab-btn" data-admin-tab="users" onclick="app.switchAdminTab('users',this)"><i
+                                class="fas fa-users"></i> Thành viên</button>
+                        <button class="admin-tab-btn" data-admin-tab="chat" onclick="app.switchAdminTab('chat',this)"><i
+                                class="fas fa-comments"></i> Chat</button>
+                        <button class="admin-tab-btn" data-admin-tab="settings" onclick="app.switchAdminTab('settings',this)"><i
+                                class="fas fa-cog"></i> Cài đặt</button>
+                    </div>
+                    <!-- TAB: Tổng quan -->
+                    <div class="admin-tab-panel active" id="admin-tab-overview">
+                        <div class="dashboard-content glass-card">
+                            <h3>Biểu đồ Doanh Thu (7 ngày)</h3>
+                            <div style="position:relative;height:300px;width:100%;margin-top:15px;"><canvas
+                                    id="admin-revenue-chart"></canvas></div>
+                        </div>
+                    </div>
+                    <!-- TAB: Đơn hàng -->
+                    <div class="admin-tab-panel" id="admin-tab-orders">
+                        <div class="dashboard-content glass-card">
+                            <h3 style="margin-bottom:15px;">Danh sách đơn hàng</h3>
+                            <div class="table-responsive">
+                                <table class="orders-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Mã ĐH</th>
+                                            <th>Khách hàng</th>
+                                            <th>Sản phẩm</th>
+                                            <th>Thời hạn</th>
+                                            <th>Số tiền</th>
+                                            <th>Ngày mua</th>
+                                            <th>Bảo hành</th>
+                                            <th>Trạng thái</th>
+                                            <th style="min-width:360px;">Xử lý</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-orders-list"></tbody>
+                                </table><div id="pagbar-admin-orders"></div>
+                            </div>
+                            <div id="admin-no-orders-msg" class="empty-state hidden"><i class="fas fa-check-circle"></i>
+                                <p>Chưa có đơn hàng nào.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- TAB: Nạp tiền -->
+                    <div class="admin-tab-panel" id="admin-tab-deposits">
+                        <div class="dashboard-content glass-card">
+                            <h3 style="margin-bottom:15px;">Duyệt Nạp Tiền</h3>
+                            <div class="table-responsive">
+                                <table class="orders-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Mã GD</th>
+                                            <th>Khách hàng</th>
+                                            <th>Số tiền</th>
+                                            <th>Mã Nạp</th>
+                                            <th>Hành động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-deposits-list"></tbody>
+                                </table><div id="pagbar-admin-deposits"></div>
+                            </div>
+                            <div id="admin-no-deposits-msg" class="empty-state hidden"><i
+                                    class="fas fa-check-circle"></i>
+                                <p>Không có yêu cầu nạp tiền nào.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- TAB: Sản phẩm -->
+                    <div class="admin-tab-panel" id="admin-tab-products">
+                        <div class="dashboard-content glass-card">
+                            <div class="admin-products-heading">
+                                <h3 style="margin:0;">Quản Lý Sản Phẩm</h3>
+                                <button class="btn-primary" onclick="app.adminAddProduct()"><i class="fas fa-plus"></i>
+                                    Thêm mới</button>
+                            </div>
+                            <section class="admin-category-manager" aria-labelledby="admin-category-title">
+                                <div class="admin-category-manager-head">
+                                    <div>
+                                        <h4 id="admin-category-title"><i class="fas fa-folder-tree"></i> Nhóm sản phẩm</h4>
+                                        <p>Tạo nhóm mới và đổi nhóm cho sản phẩm ngay trong bảng bên dưới.</p>
+                                    </div>
+                                    <form class="admin-category-create" onsubmit="app.adminCreateProductCategory(event)">
+                                        <label class="sr-only" for="admin-category-name">Tên nhóm mới</label>
+                                        <input id="admin-category-name" type="text" maxlength="40"
+                                            placeholder="Ví dụ: Học tập" autocomplete="off">
+                                        <button type="submit" class="btn-primary">
+                                            <i class="fas fa-plus"></i> Tạo nhóm
+                                        </button>
+                                    </form>
+                                </div>
+                                <div id="admin-category-list" class="admin-category-list"></div>
+                            </section>
+                            <div class="table-responsive">
+                                <table class="orders-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Ảnh</th>
+                                            <th>Tên Sản Phẩm</th>
+                                            <th>Nhóm</th>
+                                            <th>Thời Hạn</th>
+                                            <th>Bảo Hành</th>
+                                            <th>Giá</th>
+                                            <th>Kho</th>
+                                            <th>Ghi chú</th>
+                                            <th>Hành động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-products-list"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- TAB: Kho tài khoản -->
+                    <div class="admin-tab-panel" id="admin-tab-inventory">
+                        <div class="dashboard-content glass-card admin-inventory-center">
+                            <div class="inventory-center-heading">
+                                <div>
+                                    <h3><i class="fas fa-boxes-stacked"></i> Trung tâm kho tài khoản</h3>
+                                    <p>Theo dõi tồn thực tế, tài khoản trùng, lịch sử nhập và số lượng đã giao.</p>
+                                </div>
+                                <button type="button" class="btn-outline" onclick="app.renderAdminInventoryCenter()">
+                                    <i class="fas fa-rotate"></i> Làm mới
+                                </button>
+                            </div>
+
+                            <div id="admin-inventory-summary" class="inventory-summary-grid"></div>
+
+                            <div class="inventory-center-toolbar">
+                                <label class="admin-filter-input-wrap" for="admin-inventory-search">
+                                    <i class="fas fa-search"></i>
+                                    <input type="search" id="admin-inventory-search"
+                                        placeholder="Tìm sản phẩm trong kho..."
+                                        oninput="app.renderAdminInventoryCenter(this.value)">
+                                </label>
+                                <span class="inventory-low-stock-note">
+                                    <i class="fas fa-triangle-exclamation"></i> Cảnh báo khi còn 5 tài khoản trở xuống
+                                </span>
+                            </div>
+
+                            <div id="admin-inventory-products" class="inventory-product-list"></div>
+
+                            <section class="inventory-import-history" aria-labelledby="inventory-import-history-title">
+                                <div class="inventory-history-heading">
+                                    <h4 id="inventory-import-history-title"><i class="fas fa-clock-rotate-left"></i> Lịch sử nhập kho</h4>
+                                    <span>Hiển thị 20 lần gần nhất</span>
+                                </div>
+                                <div id="admin-inventory-history" class="inventory-history-list"></div>
+                            </section>
+                        </div>
+                    </div>
+                    <!-- TAB: Nguồn API nhà cung cấp -->
+                    <div class="admin-tab-panel" id="admin-tab-providers">
+                        <section class="dashboard-content glass-card provider-vault-shell" aria-labelledby="provider-vault-title">
+                            <header class="provider-vault-heading">
+                                <div>
+                                    <span class="provider-vault-kicker"><i class="fas fa-shield-halved"></i> KÉT API NHÀ CUNG CẤP</span>
+                                    <h3 id="provider-vault-title">Thêm API key ngay trong trang quản trị</h3>
+                                    <p>Key được mã hóa tại Netlify trước khi lưu Firebase. Trình duyệt không thể đọc lại key thật.</p>
+                                </div>
+                                <span id="provider-vault-status" class="provider-vault-status is-loading">Đang kiểm tra két khóa…</span>
+                            </header>
+
+                            <div class="provider-security-strip" aria-label="Cách bảo vệ API key">
+                                <span><i class="fas fa-lock"></i> Mã hóa AES-256-GCM</span>
+                                <span><i class="fas fa-eye-slash"></i> Chỉ hiện 4 ký tự cuối</span>
+                                <span><i class="fas fa-cloud-arrow-up"></i> Tự lưu vào Firebase</span>
+                            </div>
+
+                            <div id="provider-vault-setup" class="provider-vault-notice hidden">
+                                <div class="provider-notice-icon"><i class="fas fa-key"></i></div>
+                                <div>
+                                    <h4>Cần thiết lập một lần trên Netlify</h4>
+                                    <p>Vào <strong>Project configuration → Environment variables</strong>, thêm biến
+                                        <code>PROVIDER_MASTER_KEY</code> với chuỗi ngẫu nhiên tối thiểu 32 ký tự, sau đó deploy lại website.</p>
+                                    <p class="provider-notice-small">Không lưu chuỗi này trong Firebase hoặc mã nguồn. Hãy giữ một bản trong trình quản lý mật khẩu và không tự ý đổi, vì key cũ sẽ không giải mã được.</p>
+                                    <div class="provider-key-generator">
+                                        <button type="button" class="btn-outline" onclick="app.adminGenerateProviderMasterKey()">
+                                            <i class="fas fa-wand-magic-sparkles"></i> Tạo khóa mạnh giúp tôi
+                                        </button>
+                                        <div id="provider-generated-key-wrap" class="provider-generated-key hidden">
+                                            <input type="password" id="provider-generated-key" readonly aria-label="Khóa mã hóa vừa tạo">
+                                            <button type="button" class="btn-primary" onclick="app.adminCopyProviderMasterKey()">
+                                                <i class="fas fa-copy"></i> Sao chép
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <form id="provider-vault-auth" class="provider-vault-auth hidden" onsubmit="app.adminUnlockProviderVault(event)">
+                                <div class="provider-auth-copy">
+                                    <i class="fas fa-user-shield"></i>
+                                    <div><strong>Xác minh quản trị</strong><span>Nhập lại mật khẩu admin để mở két trong 2 giờ.</span></div>
+                                </div>
+                                <div class="provider-auth-controls">
+                                    <input type="password" id="provider-admin-password" autocomplete="current-password"
+                                        placeholder="Mật khẩu tài khoản admin" aria-label="Mật khẩu quản trị">
+                                    <button type="submit" id="provider-unlock-button" class="btn-primary">
+                                        <i class="fas fa-lock-open"></i> Xác minh &amp; mở két
+                                    </button>
+                                </div>
+                                <p id="provider-auth-error" class="provider-form-error" role="alert"></p>
+                            </form>
+
+                            <div id="provider-vault-manager" class="provider-vault-manager hidden">
+                                <div class="provider-session-bar">
+                                    <span id="provider-session-label"><i class="fas fa-circle-check"></i> Phiên quản lý đang được bảo vệ</span>
+                                    <button type="button" id="provider-lock-button" class="btn-outline" onclick="app.adminLockProviderVault()">
+                                        <i class="fas fa-lock"></i> Khóa két
+                                    </button>
+                                </div>
+
+                                <form id="provider-source-form" class="provider-source-form" onsubmit="app.adminSaveProvider(event)">
+                                    <input type="hidden" id="provider-source-id">
+                                    <div class="provider-form-heading">
+                                        <div>
+                                            <h4 id="provider-form-title">Thêm nguồn API mới</h4>
+                                            <p>Hệ thống sẽ thử kết nối trước, chỉ lưu khi API key hoạt động.</p>
+                                        </div>
+                                        <button type="button" id="provider-cancel-edit" class="btn-outline hidden" onclick="app.adminCancelProviderEdit()">Hủy sửa</button>
+                                    </div>
+                                    <div class="provider-form-grid">
+                                        <label>
+                                            <span>Loại bot nguồn</span>
+                                            <select id="provider-source-type" required>
+                                                <option value="nnmshop">NNM Shop — @nnmshop_bot</option>
+                                                <option value="nastele">Shop Hân Nguyễn — @shophannguyenbot</option>
+                                                <option value="nanlux">MMO NanLux — @NanLux_Bot</option>
+                                                <option value="tunvn">TunVN PreHub — @TunVN_PreHub_bot</option>
+                                            </select>
+                                        </label>
+                                        <label>
+                                            <span>Tên dễ nhớ</span>
+                                            <input type="text" id="provider-source-label" maxlength="80" required
+                                                placeholder="Ví dụ: NNM nguồn chính" autocomplete="off">
+                                        </label>
+                                        <label class="provider-key-field">
+                                            <span>API key nhà cung cấp</span>
+                                            <input type="password" id="provider-source-key" minlength="8" maxlength="512" required
+                                                placeholder="Dán API key do bot nguồn cung cấp" autocomplete="new-password" spellcheck="false">
+                                        </label>
+                                    </div>
+                                    <div class="provider-form-footer">
+                                        <span><i class="fas fa-circle-info"></i> Key thật không được gửi trở lại trình duyệt sau khi lưu.</span>
+                                        <button type="submit" id="provider-save-button" class="btn-primary">
+                                            <i class="fas fa-shield-halved"></i> Kiểm tra &amp; lưu an toàn
+                                        </button>
+                                    </div>
+                                </form>
+
+                                <div class="provider-list-heading">
+                                    <div><h4>Nguồn đã kết nối</h4><p>Kiểm tra số dư và danh mục trực tiếp từ API nguồn.</p></div>
+                                    <button type="button" class="btn-outline" onclick="app.loadProviderVault()"><i class="fas fa-rotate"></i> Làm mới</button>
+                                </div>
+                                <div id="provider-sources-list" class="provider-sources-list"></div>
+                            </div>
+                        </section>
+                    </div>
+                    <!-- TAB: Thành viên -->
+                    <div class="admin-tab-panel" id="admin-tab-users">
+                        <div class="dashboard-content glass-card">
+                            <h3 style="margin-bottom:15px;">Quản Lý Thành Viên</h3>
+                            <div class="table-responsive">
+                                <table class="orders-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Tên Đăng Nhập</th>
+                                            <th>Email</th>
+                                            <th>Số dư</th>
+                                            <th>Hành động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-users-list"></tbody>
+                                </table><div id="pagbar-admin-users"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- TAB: Chat -->
+                    <div class="admin-tab-panel" id="admin-tab-chat">
+                        <div class="dashboard-content glass-card">
+                            <h3 style="margin-bottom:15px;">Hỗ trợ khách hàng (Chat)</h3>
+                            <div class="admin-chat-container">
+                                <!-- Left Panel: User List -->
+                                <div class="admin-chat-sidebar">
+                                    <!-- Search Box -->
+                                    <div class="admin-chat-search-wrap">
+                                        <i class="fas fa-search admin-chat-search-icon"></i>
+                                        <input type="text" id="admin-chat-search" class="admin-chat-search-input"
+                                            placeholder="Tìm khách hàng..."
+                                            oninput="app.filterAdminChatUsers(this.value)">
+                                    </div>
+                                    <!-- Mode Toggle -->
+                                    <div class="admin-chat-mode-btns">
+                                        <button class="admin-chat-mode-btn active" id="acm-btn-active"
+                                            onclick="app.switchAdminChatMode('active', this)">
+                                            <i class="fas fa-comments"></i> Đang chat
+                                        </button>
+                                        <button class="admin-chat-mode-btn" id="acm-btn-all"
+                                            onclick="app.switchAdminChatMode('all', this)">
+                                            <i class="fas fa-users"></i> Tất cả
+                                        </button>
+                                    </div>
+                                    <!-- User List -->
+                                    <div class="admin-chat-users" id="admin-chat-users"></div>
+                                </div>
+                                <!-- Right Panel: Chat Box -->
+                                <div class="admin-chat-box">
+                                    <div class="admin-chat-header" id="admin-chat-header">
+                                        <i class="fas fa-comments" style="opacity:0.5;margin-right:8px;"></i>
+                                        Chọn một khách hàng để bắt đầu chat
+                                    </div>
+                                    <div class="admin-chat-messages" id="admin-chat-messages"></div>
+                                    <div class="admin-chat-input hidden" id="admin-chat-input-area">
+                                        <button class="btn-icon" onclick="app.sendImagePrompt('admin')"
+                                            style="color:var(--accent);margin-right:5px;"><i
+                                                class="fas fa-image"></i></button>
+                                        <input type="text" id="admin-chat-input" placeholder="Nhập tin nhắn..."
+                                            onkeypress="if(event.key==='Enter')app.sendAdminMessage()"
+                                            onpaste="app.handleChatPaste(event,'admin')">
+                                        <button class="btn-primary" onclick="app.sendAdminMessage()"><i
+                                                class="fas fa-paper-plane"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- TAB: Cài đặt -->
+                    <div class="admin-tab-panel" id="admin-tab-settings">
+                        <!-- OTP API CONFIG: key giữ ở server, Firebase chỉ lưu cấu hình công khai -->
+                        <div class="dashboard-content glass-card" style="margin-bottom:20px;border:1px solid rgba(168,85,247,0.35);">
+                            <h3 style="display:flex;align-items:center;gap:10px;">
+                                🔑 Cấu hình OTP API (chaycodeso3)
+                                <span id="otpcfg-status" style="font-size:0.72rem;padding:3px 10px;border-radius:20px;font-weight:700;background:rgba(255,255,255,0.08);color:var(--text-muted);">Đang tải...</span>
+                            </h3>
+                            <p style="color:var(--text-muted);font-size:0.85rem;margin:8px 0 16px;">Web chỉ gọi API OTP qua Netlify Function. Khóa thật không được gửi xuống trình duyệt hoặc lưu bằng biểu mẫu này.</p>
+                            <div style="display:flex;flex-direction:column;gap:12px;">
+                                <div style="padding:12px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:10px;font-size:0.84rem;color:var(--text-secondary);">
+                                    <i class="fas fa-shield-halved" style="color:#10b981;margin-right:6px;"></i>
+                                    Đặt <code>OTP_API_KEY</code> trong <b style="color:white;">Netlify → Environment variables</b>. Bot Telegram trên Railway dùng biến riêng cùng tên.
+                                </div>
+                                <div>
+                                    <label style="font-size:0.82rem;color:var(--text-muted);display:block;margin-bottom:6px;">OTP Base URL</label>
+                                    <input type="text" id="admin-otp-baseurl-input" placeholder="https://chaycodeso3.com/api" style="width:100%;padding:12px 14px;border-radius:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(168,85,247,0.3);color:white;font-family:monospace;font-size:0.85rem;box-sizing:border-box;">
+                                </div>
+                                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                                    <button class="btn-primary" onclick="app.adminSaveOTPConfig()" style="flex:1;min-width:120px;"><i class="fas fa-save"></i> Lưu URL</button>
+                                    <button class="btn-outline" onclick="app.adminTestOTPConfig()" style="flex:1;min-width:120px;border-color:var(--accent);color:var(--accent);"><i class="fas fa-vial"></i> Test API</button>
+                                </div>
+                                <div id="otpcfg-info" style="display:none;padding:12px;background:rgba(0,0,0,0.3);border-radius:10px;font-size:0.82rem;"></div>
+                            </div>
+                        </div>
+                        <!-- HỆ SỐ GIÁ BÁN (đồng bộ web + bot qua settings/config.priceMultiplier) -->
+                        <div class="dashboard-content glass-card" style="margin-bottom:20px;border:1px solid rgba(34,197,94,0.3);">
+                            <h3 style="display:flex;align-items:center;gap:10px;">
+                                💵 Hệ số giá bán OTP
+                                <span id="pricemul-status" style="font-size:0.72rem;padding:3px 10px;border-radius:20px;font-weight:700;background:rgba(255,255,255,0.08);color:var(--text-muted);">Đang tải...</span>
+                            </h3>
+                            <p style="color:var(--text-muted);font-size:0.85rem;margin:8px 0 16px;">Giá bán = <b style="color:white;">giá gốc × hệ số</b>. Đổi 1 lần, áp dụng cho <b style="color:white;">toàn bộ app</b> trên cả web và bot. Bot tự cập nhật trong ~1 phút.</p>
+                            <div style="display:flex;flex-direction:column;gap:12px;">
+                                <div>
+                                    <label style="font-size:0.82rem;color:var(--text-muted);display:block;margin-bottom:6px;">Hệ số nhân (số nguyên dương, vd 3000)</label>
+                                    <input type="number" min="1" step="1" id="admin-pricemul-input" placeholder="3000" oninput="app.updatePriceMulPreview()" style="width:100%;padding:12px 14px;border-radius:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(34,197,94,0.3);color:white;font-family:monospace;font-size:0.95rem;box-sizing:border-box;">
+                                </div>
+                                <div id="pricemul-preview" style="font-size:0.84rem;color:var(--text-secondary);background:rgba(0,0,0,0.25);border-radius:10px;padding:10px 12px;">Ví dụ: giá gốc 1 → bán <b style="color:#22c55e;">3.000đ</b></div>
+                                <button class="btn-primary" onclick="app.adminSavePriceMultiplier()" style="min-width:120px;"><i class="fas fa-save"></i> Lưu hệ số giá</button>
+                            </div>
+                        </div>
+                        <!-- SETUP / MIGRATION (trạng thái bot + checklist khi đổi Railway) -->
+                        <div class="dashboard-content glass-card" style="margin-bottom:20px;border:1px solid rgba(59,130,246,0.3);">
+                            <h3 style="display:flex;align-items:center;gap:10px;">
+                                🚀 Triển khai &amp; Trạng thái Bot
+                                <span id="bot-status-badge" style="font-size:0.72rem;padding:3px 10px;border-radius:20px;font-weight:700;background:rgba(255,255,255,0.08);color:var(--text-muted);">Đang tải...</span>
+                            </h3>
+                            <p id="bot-status-detail" style="color:var(--text-muted);font-size:0.85rem;margin:8px 0 16px;">Đang kiểm tra heartbeat của bot...</p>
+
+                            <div style="background:rgba(0,0,0,0.25);border-radius:12px;padding:16px;border:1px dashed rgba(59,130,246,0.3);">
+                                <p style="font-size:0.88rem;font-weight:700;margin:0 0 10px;color:#3b82f6;"><i class="fas fa-list-check"></i> Checklist khi đổi tài khoản Railway</p>
+                                <p style="font-size:0.82rem;color:var(--text-muted);margin:0 0 12px;">Vào Railway → service bot → tab <b style="color:white;">Variables</b>, set các biến sau. Còn lại (OTP key, danh sách app...) đã đồng bộ qua web nên không cần nhập lại.</p>
+                                <ul style="margin:0;padding-left:18px;font-size:0.84rem;line-height:1.9;color:var(--text-secondary);">
+                                    <li><code>BOT_TOKEN</code> — token bot Telegram <b style="color:#ef4444;">(bắt buộc)</b></li>
+                                    <li><code>ADMIN_ID</code> — Telegram ID của admin <b style="color:#ef4444;">(bắt buộc)</b></li>
+                                    <li><code>FIREBASE_DB_URL</code> — URL Realtime DB <b style="color:#ef4444;">(bắt buộc)</b></li>
+                                    <li><code>FIREBASE_SECRET</code> — để bot gửi heartbeat hiện ở trên <span style="color:var(--text-muted);">(tùy chọn)</span></li>
+                                    <li><code>OTP_API_KEY</code> — khóa OTP của bot <b style="color:#ef4444;">(bắt buộc)</b></li>
+                                    <li><code>OTP_BASE_URL</code> — URL nguồn OTP <span style="color:var(--text-muted);">(tùy chọn)</span></li>
+                                </ul>
+                                <p style="font-size:0.8rem;color:var(--text-muted);margin:12px 0 0;"><i class="fas fa-triangle-exclamation" style="color:var(--warning);"></i> Nhớ gắn <b style="color:white;">Volume</b> vào service bot (mount <code>/data</code>) để không mất số dư khi redeploy, và chỉ chạy <b style="color:white;">1 instance / 1 project</b> cho mỗi bot token.</p>
+                            </div>
+                        </div>
+                        <!-- MAINTENANCE MODE SETTINGS -->
+                        <div class="dashboard-content glass-card" style="margin-bottom:20px;border:1px solid rgba(239,68,68,0.3);">
+                            <h3 style="display:flex;align-items:center;gap:10px;">
+                                <i class="fas fa-tools" style="color:#ef4444;"></i> Chế Độ Bảo Trì
+                                <span id="maintenance-mode-badge" style="font-size:0.72rem;padding:3px 10px;border-radius:20px;font-weight:700;background:rgba(34,197,94,0.12);color:#22c55e;">Đang hoạt động bình thường</span>
+                            </h3>
+                            <p style="color:var(--text-muted);font-size:0.85rem;margin:8px 0 16px;">Bật bảo trì để hiển thị trang thông báo cho khách. Admin luôn bypass và truy cập bình thường.</p>
+
+                            <!-- Mode selector -->
+                            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+                                <button id="maint-btn-off" class="btn-primary maint-mode-btn active-maint-btn" onclick="app.adminSetMaintenanceMode('off')" style="flex:1;min-width:140px;">
+                                    <i class="fas fa-check-circle"></i> Hoạt động bình thường
+                                </button>
+                                <button id="maint-btn-full" class="btn-outline maint-mode-btn" onclick="app.adminSetMaintenanceMode('full')" style="flex:1;min-width:140px;border-color:#ef4444;color:#ef4444;">
+                                    <i class="fas fa-ban"></i> Bảo trì toàn bộ
+                                </button>
+                                <button id="maint-btn-account_only" class="btn-outline maint-mode-btn" onclick="app.adminSetMaintenanceMode('account_only')" style="flex:1;min-width:140px;border-color:var(--warning);color:var(--warning);">
+                                    <i class="fas fa-eye-slash"></i> Ẩn dịch vụ tài khoản
+                                </button>
+                            </div>
+
+                            <!-- Custom message -->
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="font-size:0.85rem;color:var(--text-muted);">Thông báo hiển thị cho khách</label>
+                                <textarea id="admin-maint-message" rows="2" placeholder="VD: Hệ thống đang nâng cấp, vui lòng quay lại sau 30 phút." style="width:100%;padding:10px 14px;border-radius:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(239,68,68,0.3);color:white;font-size:0.88rem;resize:vertical;"></textarea>
+                            </div>
+
+                            <!-- Contact info -->
+                            <p style="font-size:0.85rem;font-weight:600;margin-bottom:10px;color:var(--text-muted);">Thông tin liên hệ khẩn cấp (để trống nếu không dùng)</p>
+                            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:16px;">
+                                <div style="position:relative;">
+                                    <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#00b0ff;font-size:0.9rem;"><i class="fas fa-comment-dots"></i></span>
+                                    <input type="text" id="admin-maint-zalo" placeholder="Số Zalo (VD: 0901234567)" style="width:100%;padding:10px 14px 10px 36px;border-radius:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.1);color:white;font-size:0.85rem;">
+                                </div>
+                                <div style="position:relative;">
+                                    <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#1877f2;font-size:0.9rem;"><i class="fab fa-facebook"></i></span>
+                                    <input type="text" id="admin-maint-facebook" placeholder="Link Facebook / Fanpage" style="width:100%;padding:10px 14px 10px 36px;border-radius:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.1);color:white;font-size:0.85rem;">
+                                </div>
+                                <div style="position:relative;">
+                                    <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#26a5e4;font-size:0.9rem;"><i class="fab fa-telegram"></i></span>
+                                    <input type="text" id="admin-maint-telegram" placeholder="Link Telegram / @username" style="width:100%;padding:10px 14px 10px 36px;border-radius:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.1);color:white;font-size:0.85rem;">
+                                </div>
+                                <div style="position:relative;">
+                                    <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#ea4335;font-size:0.9rem;"><i class="fas fa-envelope"></i></span>
+                                    <input type="text" id="admin-maint-email" placeholder="Địa chỉ Email" style="width:100%;padding:10px 14px 10px 36px;border-radius:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.1);color:white;font-size:0.85rem;">
+                                </div>
+                            </div>
+                            <button class="btn-primary" onclick="app.adminSaveMaintenance()" style="padding:10px 28px;">
+                                <i class="fas fa-save"></i> Lưu Thông Tin Liên Hệ & Tin Nhắn
+                            </button>
+                        </div>
+                        <!-- MANAGE OTP APPS FROM SOURCE -->
+                        <div class="dashboard-content glass-card" style="margin-bottom:20px;border:1px solid rgba(99,102,241,0.3);">
+                            <h3 style="display:flex;align-items:center;gap:10px;">
+                                <i class="fas fa-layer-group" style="color:#818cf8;"></i> Quản Lý App OTP Hiển Thị
+                                <span style="font-size:0.72rem;padding:3px 10px;border-radius:20px;font-weight:700;background:rgba(99,102,241,0.12);color:#818cf8;">Lấy từ chaycodeso3.com</span>
+                            </h3>
+                            <p style="color:var(--text-muted);font-size:0.85rem;margin:8px 0 16px;">Chọn app muốn hiển thị cho khách hàng từ toàn bộ danh sách trên web mẹ. Lưu xong sẽ cập nhật ngay cả web lẫn bot.</p>
+                            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+                                <button class="btn-primary" onclick="app.adminLoadAllOTPAppsForSelector()" style="padding:10px 20px;">
+                                    <i class="fas fa-cloud-download-alt"></i> Tải danh sách từ web mẹ
+                                </button>
+                                <button class="btn-primary" onclick="app.adminSaveSelectedApps()" style="padding:10px 20px;background:linear-gradient(135deg,#10b981,#059669);">
+                                    <i class="fas fa-save"></i> Lưu danh sách đã chọn
+                                </button>
+                            </div>
+                            <div id="admin-otp-app-selector" style="min-height:40px;">
+                                <p style="color:var(--text-muted);font-size:0.83rem;padding:8px 0;"><i class="fas fa-info-circle"></i> Nhấn "Tải danh sách" để xem toàn bộ app từ web mẹ và chọn app muốn bán.</p>
+                            </div>
+                        </div>
+                        <!-- OTP APP IMAGE SETTINGS -->
+                        <div class="dashboard-content glass-card" style="margin-bottom:20px;border:1px solid rgba(16,185,129,0.25);">
+                            <h3 style="display:flex;align-items:center;gap:10px;">
+                                <i class="fas fa-layer-group" style="color:#10b981;"></i> Hình Ảnh &amp; Phân Nhóm App OTP
+                                <span style="font-size:0.72rem;padding:3px 10px;border-radius:20px;font-weight:700;background:rgba(16,185,129,0.12);color:#10b981;">URL + Nhóm thủ công</span>
+                            </h3>
+                            <p style="color:var(--text-muted);font-size:0.85rem;margin:8px 0 16px;">Gán nhóm (Mua sắm, Mạng xã hội...) và nhập URL ảnh cho từng app. Bot Telegram cũng tự động hiển thị theo nhóm.</p>
+                            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+                                <button class="btn-primary" onclick="app.adminLoadImageManager()" style="padding:10px 20px;background:linear-gradient(135deg,#10b981,#059669);">
+                                    <i class="fas fa-sync-alt"></i> Tải danh sách
+                                </button>
+                                <button class="btn-primary" onclick="app.adminSaveAppImages()" style="padding:10px 20px;">
+                                    <i class="fas fa-save"></i> Lưu hình ảnh &amp; nhóm
+                                </button>
+                            </div>
+                            <div id="admin-otp-image-manager" style="min-height:40px;">
+                                <p style="color:var(--text-muted);font-size:0.83rem;padding:8px 0;"><i class="fas fa-info-circle"></i> Nhấn "Tải danh sách" để gán nhóm và nhập URL ảnh cho từng app.</p>
+                            </div>
+                        </div>
+                        <!-- OTP APP NOTES SETTINGS -->
+                        <div class="dashboard-content glass-card" style="margin-bottom:20px;border:1px solid rgba(245,158,11,0.25);">
+                            <h3 style="display:flex;align-items:center;gap:10px;">
+                                <i class="fas fa-sticky-note" style="color:var(--warning);"></i> Ghi Chú OTP Theo App
+                                <span style="font-size:0.72rem;padding:3px 10px;border-radius:20px;font-weight:700;background:rgba(245,158,11,0.12);color:var(--warning);">Khách hàng sẽ thấy trước khi mua</span>
+                            </h3>
+                            <p style="color:var(--text-muted);font-size:0.85rem;margin:8px 0 16px;">Thêm ghi chú cảnh báo, hướng dẫn cho từng app OTP. Khách hàng sẽ đọc ghi chú trước khi xác nhận thuê số.</p>
+                            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+                                <select id="admin-otp-note-app-select" style="flex:2;min-width:180px;padding:10px 14px;border-radius:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(245,158,11,0.3);color:white;font-size:0.9rem;">
+                                    <!-- Options will be populated by JS -->
+                                </select>
+                                <button class="btn-primary" onclick="app.adminLoadOTPNote()" style="flex-shrink:0;padding:10px 18px;">
+                                    <i class="fas fa-search"></i> Xem / Sửa
+                                </button>
+                            </div>
+                            <div id="admin-otp-note-editor" style="display:none;">
+                                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                                    <span id="admin-otp-note-app-label" style="font-weight:700;font-size:1rem;"></span>
+                                    <span id="admin-otp-note-status" style="font-size:0.75rem;padding:2px 8px;border-radius:12px;"></span>
+                                </div>
+                                <textarea id="admin-otp-note-content" rows="4" placeholder="Nhập ghi chú cho app này... (Hỗ trợ xuống dòng)&#10;VD: ⚠️ Số chỉ nhận được OTP sau 1-3 phút. Không hoàn tiền nếu đã nhận mã.&#10;💡 Nên chọn nhà mạng Viettel để tỉ lệ thành công cao hơn."
+                                    style="width:100%;padding:12px;border-radius:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(245,158,11,0.3);color:white;font-size:0.9rem;resize:vertical;line-height:1.6;"></textarea>
+                                <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;">
+                                    <button class="btn-primary" onclick="app.adminSaveOTPNote()" style="flex:1;min-width:120px;">
+                                        <i class="fas fa-save"></i> Lưu Ghi Chú
+                                    </button>
+                                    <button class="btn-outline" onclick="app.adminDeleteOTPNote()" style="flex:1;min-width:120px;border-color:var(--danger);color:var(--danger);">
+                                        <i class="fas fa-trash"></i> Xóa Ghi Chú
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="admin-otp-notes-summary" style="margin-top:18px;">
+                                <!-- JS renders list of apps with notes -->
+                            </div>
+                        </div>
+                        <!-- TELEGRAM BOT NOTIFICATION SETTINGS -->
+                        <div class="dashboard-content glass-card" style="margin-bottom:20px;border:1px solid rgba(37,211,102,0.3);">
+                            <h3 style="display:flex;align-items:center;gap:10px;">
+                                <i class="fab fa-telegram" style="color:#26a5e4;font-size:1.1em;"></i> Bot Telegram Nhận Thông Báo
+                                <span id="tgbot-count-badge" style="font-size:0.72rem;padding:3px 10px;border-radius:20px;font-weight:700;background:rgba(255,255,255,0.08);color:var(--text-muted);">0 bot</span>
+                            </h3>
+                            <p style="color:var(--text-muted);font-size:0.85rem;margin:8px 0 16px;">Thêm bot Telegram để nhận thông báo tức thì khi có <b style="color:white;">đơn hàng mới</b>, <b style="color:white;">yêu cầu nạp tiền</b> hoặc <b style="color:white;">khách hàng nhắn tin</b>. Có thể thêm nhiều bot cùng lúc.</p>
+
+                            <!-- Danh sách bot hiện có -->
+                            <div id="admin-telegram-bots-list" style="margin-bottom:16px;"></div>
+
+                            <!-- Form thêm bot mới -->
+                            <div style="background:rgba(0,0,0,0.2);border-radius:12px;padding:16px;border:1px dashed rgba(37,211,102,0.3);">
+                                <p style="font-size:0.85rem;font-weight:600;margin:0 0 12px;color:#25d366;"><i class="fas fa-plus-circle"></i> Thêm Bot Mới</p>
+                                <div style="display:flex;flex-direction:column;gap:10px;">
+                                    <input type="text" id="admin-tgbot-label" placeholder="Tên bot (VD: Bot chính, Bot backup...)" style="width:100%;padding:10px 14px;border-radius:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(37,211,102,0.3);color:white;font-size:0.88rem;box-sizing:border-box;">
+                                    <div style="position:relative;">
+                                        <input type="password" id="admin-tgbot-token" placeholder="Bot Token (VD: 1234567890:AAHxxxx...)" style="width:100%;padding:10px 44px 10px 14px;border-radius:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(37,211,102,0.3);color:white;font-family:monospace;font-size:0.85rem;box-sizing:border-box;">
+                                        <button type="button" id="btn-toggle-tgtoken-vis" onclick="const i=document.getElementById('admin-tgbot-token');i.type=i.type==='password'?'text':'password';this.querySelector('i').className=i.type==='password'?'fas fa-eye':'fas fa-eye-slash';" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;"><i class="fas fa-eye"></i></button>
+                                    </div>
+                                    <input type="text" id="admin-tgbot-chatid" placeholder="Chat ID (VD: 7078570432 hoặc -100xxxxxxxxxx)" style="width:100%;padding:10px 14px;border-radius:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(37,211,102,0.3);color:white;font-family:monospace;font-size:0.88rem;box-sizing:border-box;">
+                                </div>
+                                <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
+                                    <button class="btn-primary" onclick="app.adminAddTelegramBot()" style="flex:1;min-width:130px;background:linear-gradient(135deg,#1a7a4a,#25d366);border-color:#1a7a4a;box-shadow:0 4px 16px rgba(37,211,102,0.3);">
+                                        <i class="fas fa-plus"></i> Thêm Bot
+                                    </button>
+                                    <button class="btn-outline" onclick="app.adminShowTelegramHelp()" style="flex:1;min-width:130px;border-color:#26a5e4;color:#26a5e4;">
+                                        <i class="fas fa-question-circle"></i> Hướng dẫn
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-content glass-card" style="margin-bottom:20px;">
+                            <h3>Quản Lý Banners <i class="fas fa-images"></i></h3>
+                            <form id="admin-add-banner-form" onsubmit="app.adminAddBanner(event)"
+                                style="display:flex;gap:10px;flex-wrap:wrap;margin:15px 0;background:rgba(0,0,0,0.2);padding:15px;border-radius:10px;">
+                                <input type="url" id="admin-banner-img" placeholder="URL Hình ảnh Banner" required
+                                    style="flex:2;min-width:200px;">
+                                <input type="url" id="admin-banner-link" placeholder="Link đích (Tùy chọn)"
+                                    style="flex:2;min-width:200px;">
+                                <button type="submit" class="btn-primary" style="flex:1;min-width:120px;"><i
+                                        class="fas fa-plus"></i> Thêm</button>
+                            </form>
+                            <div id="admin-banners-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+                        </div>
+                        <div class="dashboard-content glass-card">
+                            <h3>Quản Lý Thông Báo <i class="fas fa-bullhorn"></i></h3>
+                            <form id="admin-add-notification-form" onsubmit="app.adminAddNotification(event)"
+                                style="display:flex;flex-direction:column;gap:10px;margin:15px 0;background:rgba(0,0,0,0.2);padding:15px;border-radius:10px;">
+                                <input type="text" id="admin-notif-title" placeholder="Tiêu đề thông báo..." required
+                                    style="padding:10px;border-radius:6px;border:1px solid var(--card-border);background:rgba(0,0,0,0.3);color:white;">
+                                <textarea id="admin-notif-content" placeholder="Nội dung thông báo..." required rows="3"
+                                    style="padding:10px;border-radius:6px;border:1px solid var(--card-border);background:rgba(0,0,0,0.3);color:white;resize:vertical;"></textarea>
+                                <select id="admin-notif-type"
+                                    style="padding:10px;border-radius:6px;border:1px solid var(--card-border);background:rgba(0,0,0,0.3);color:white;">
+                                    <option value="info">Thông tin</option>
+                                    <option value="success">Thành công</option>
+                                    <option value="warning">Cảnh báo</option>
+                                </select>
+                                <button type="submit" class="btn-primary"
+                                    style="align-self:flex-start;padding:8px 20px;"><i class="fas fa-paper-plane"></i>
+                                    Gửi Thông Báo</button>
+                            </form>
+                            <div id="admin-notifications-list" style="display:flex;flex-direction:column;gap:10px;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- MAINTENANCE VIEW -->
+            <section id="view-maintenance" class="view">
+                <div class="maintenance-container">
+                    <div class="maintenance-card glass-card">
+                        <div class="maintenance-icon-wrap">
+                            <div class="maintenance-icon-ring">
+                                <i class="fas fa-tools maintenance-icon"></i>
+                            </div>
+                        </div>
+                        <h1 class="maintenance-title">Hệ Thống Đang <span class="text-gradient">Nâng Cấp</span></h1>
+                        <p class="maintenance-subtitle" id="maintenance-message">Chúng tôi đang nâng cấp hệ thống để mang lại trải nghiệm tốt hơn cho bạn. Vui lòng quay lại sau ít phút.</p>
+                        <div class="maintenance-progress">
+                            <div class="maintenance-progress-bar"></div>
+                        </div>
+                        <div class="maintenance-contact" id="maintenance-contact-section">
+                            <p class="maintenance-contact-label"><i class="fas fa-bolt"></i> Cần gấp? Liên hệ ngay:</p>
+                            <div class="maintenance-contact-grid" id="maintenance-contact-grid">
+                                <!-- JS renders contact buttons here -->
+                            </div>
+                        </div>
+                        <!-- Hidden admin login link — visible only if needed -->
+                        <div style="margin-top:28px;text-align:center;">
+                            <a href="#" onclick="app.navigate('login');return false;" style="font-size:0.75rem;color:rgba(255,255,255,0.2);text-decoration:none;letter-spacing:0.05em;" onmouseover="this.style.color='rgba(255,255,255,0.6)'" onmouseout="this.style.color='rgba(255,255,255,0.2)'">
+                                Đăng nhập quản trị
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer>
+            <div class="container footer-content">
+                <div class="footer-logo">
+                    <a href="javascript:void(0)" class="logo" onclick="app.navigate('home');return false;">
+                        <img class="site-img-logo site-img-logo-light" src="assets/logo-motion.svg?v=9" alt="Tài Khoản Xịn">
+                        <img class="site-img-logo site-img-logo-dark" src="assets/logo-motion-dark.svg?v=2" alt="Tài Khoản Xịn">
+                    </a>
+                </div>
+                <div class="footer-links">
+                    <h4>Về chúng tôi</h4>
+                    <ul>
+                        <li><a href="javascript:void(0)" onclick="app.navigate('home');return false;">Giới thiệu</a></li>
+                        <li><a href="javascript:void(0)" onclick="document.getElementById('products-section')?.scrollIntoView({behavior:'smooth'});return false;">Tin tức</a></li>
+                        <li><a href="javascript:void(0)" onclick="app.navigate('otp');return false;">Dịch vụ OTP</a></li>
+                        <li><a href="javascript:void(0)" onclick="document.querySelector('footer')?.scrollIntoView({behavior:'smooth'});return false;">Liên hệ</a></li>
+                    </ul>
+                </div>
+                <div class="footer-links">
+                    <h4>Chính sách</h4>
+                    <ul>
+                        <li><a href="javascript:void(0)">Chính sách bảo mật</a></li>
+                        <li><a href="javascript:void(0)">Điều khoản sử dụng</a></li>
+                        <li><a href="javascript:void(0)">Chính sách bảo hành</a></li>
+                        <li><a href="javascript:void(0)">Quy định chung</a></li>
+                    </ul>
+                </div>
+                <div class="footer-contact">
+                    <h4>Hỗ trợ</h4>
+                    <p><i class="fas fa-envelope"></i>t.me/tai_khoan_xin</p>
+                    <p><i class="fas fa-phone"></i> 0583068926</p>
+                    <p><i class="fas fa-clock"></i> Hỗ trợ 24/7</p>
+                </div>
+            </div>
+            <div class="container footer-bottom">
+                <p>&copy; 2024 taikhoanxin.site - All rights reserved.</p>
+            </div>
+        </footer>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="toast hidden">
+            <i class="fas fa-check-circle"></i>
+            <span id="toast-msg">Thành công!</span>
+        </div>
+
+        <!-- Product Modal for Admin -->
+        <div id="product-modal" class="loading-overlay hidden"
+            style="align-items: center; justify-content: center; z-index: 10000; background: rgba(0,0,0,0.8);">
+            <div class="glass-card"
+                style="width: 100%; max-width: 620px; padding: 25px; position: relative; max-height: 90vh; overflow-y: auto;">
+                <button onclick="app.closeAdminProductModal()" class="btn-icon"
+                    style="position: absolute; top: 15px; right: 15px; font-size: 1.5rem;"><i
+                        class="fas fa-times"></i></button>
+                <h3 id="product-modal-title" style="margin-bottom: 20px; color: var(--primary);">Thêm Sản Phẩm Mới</h3>
+
+                <form id="product-form" onsubmit="app.adminSaveProduct(event)">
+                    <input type="hidden" id="product-id">
+                    <div class="form-group">
+                        <label for="product-name">Tên sản phẩm</label>
+                        <input type="text" id="product-name" required placeholder="VD: Netflix Premium">
+                    </div>
+                    <div class="form-group">
+                        <label for="product-category">Nhóm sản phẩm</label>
+                        <select id="product-category" required></select>
+                        <small class="product-category-help">Nhóm này dùng để sắp xếp và lọc sản phẩm ngoài trang chủ.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="product-duration">Thời hạn</label>
+                        <input type="text" id="product-duration" required placeholder="VD: 1 Tháng">
+                    </div>
+                    <div class="form-group">
+                        <label>Bảo hành</label>
+                        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;color:var(--text-main);font-weight:600;">
+                            <input type="checkbox" id="product-warranty-enabled" onchange="app.toggleProductWarranty(this.checked)" style="accent-color:var(--primary);">
+                            Có bảo hành
+                        </label>
+                        <input type="text" id="product-warranty" placeholder="VD: 24h hoặc 7 ngày" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label for="product-price">Giá (VNĐ)</label>
+                        <input type="number" id="product-price" required placeholder="VD: 50000">
+                    </div>
+                    <div class="form-group">
+                        <label for="product-quantity">Số lượng (Kho)</label>
+                        <input type="number" id="product-quantity" required placeholder="VD: 100">
+                        <small id="product-quantity-help" class="product-category-help">Sản phẩm thủ công: admin tự nhập số lượng.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="product-logo">Link Ảnh Icon (URL)</label>
+                        <input type="url" id="product-logo" required placeholder="https://i.ibb.co/...">
+                        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">* Bạn có thể upload
+                            ảnh
+                            lên ImgBB và dán link vào đây.</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="product-desc">Ghi chú (Note hiển thị cho khách)</label>
+                        <textarea id="product-desc" rows="3" required
+                            placeholder="VD: Xem không quảng cáo. Lúc này đang có hàng sẵn..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="product-format">Định dạng cấp (Format)</label>
+                        <input type="text" id="product-format" required
+                            placeholder="VD: Email:Password hoặc Nâng cấp chính chủ">
+                    </div>
+
+                    <!-- NGUỒN HÀNG SECTION -->
+                    <div class="form-group" style="background:rgba(0,240,255,0.05);border:1px solid rgba(0,240,255,0.2);border-radius:12px;padding:16px;">
+                        <label style="font-weight:700;color:var(--accent);margin-bottom:12px;display:block;">
+                            <i class="fas fa-truck"></i> Nguồn hàng
+                        </label>
+                        <!-- Radio chọn chế độ -->
+                        <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+                            <label id="source-manual-label" style="flex:1;min-width:140px;display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;border:2px solid var(--primary);background:rgba(255,0,127,0.1);cursor:pointer;transition:all 0.2s;">
+                                <input type="radio" name="product-source-mode" id="source-manual" value="manual" checked onchange="app.toggleProductSourceMode('manual')" style="accent-color:var(--primary);">
+                                <span>🖐️ <strong>Thủ công</strong><br><small style="color:var(--text-muted);font-size:0.72rem;">Admin tự cấp tài khoản</small></span>
+                            </label>
+                            <label id="source-auto-label" style="flex:1;min-width:140px;display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;border:2px solid var(--card-border);cursor:pointer;transition:all 0.2s;">
+                                <input type="radio" name="product-source-mode" id="source-auto" value="inventory" onchange="app.toggleProductSourceMode('inventory')" style="accent-color:var(--accent);">
+                                <span>⚡ <strong>Tự động</strong><br><small style="color:var(--text-muted);font-size:0.72rem;">Kho tài khoản nhập sẵn</small></span>
+                            </label>
+                        </div>
+
+                        <!-- INTERNAL INVENTORY SECTION (ẩn mặc định) -->
+                        <div id="inventory-config-section" class="inventory-config-section" style="display:none;">
+                            <div class="inventory-status-row">
+                                <span>
+                                    <i class="fas fa-boxes-stacked"></i>
+                                    Kho hiện tại: <strong id="inventory-current-count">0</strong>
+                                </span>
+                                <span>
+                                    Sẽ nhập: <strong id="inventory-draft-count">0</strong>
+                                </span>
+                            </div>
+                            <p class="inventory-help">
+                                Mỗi ô Excel hoặc mỗi dòng dán bên dưới được tính là một tài khoản. Khi khách mua N sản phẩm,
+                                hệ thống lấy đúng N tài khoản khỏi kho và giao ngay trong lịch sử đơn.
+                            </p>
+                            <div class="inventory-import-grid">
+                                <label class="inventory-file-button" for="product-inventory-file">
+                                    <i class="fas fa-file-excel"></i>
+                                    <span>Chọn Excel / CSV</span>
+                                </label>
+                                <input type="file" id="product-inventory-file" accept=".xlsx,.xls,.csv,.txt"
+                                    onchange="app.handleInventoryFile(this.files && this.files[0])">
+                                <select id="product-inventory-mode" aria-label="Cách cập nhật kho"
+                                    onchange="app.previewInventoryDraft()">
+                                    <option value="append">Thêm vào kho hiện tại</option>
+                                    <option value="replace">Thay toàn bộ kho</option>
+                                </select>
+                            </div>
+                            <textarea id="product-inventory-text" rows="6"
+                                oninput="app.previewInventoryDraft()"
+                                placeholder="Mỗi dòng là một tài khoản&#10;email1@example.com|matkhau1&#10;email2@example.com|matkhau2"></textarea>
+                            <div id="inventory-preview" class="inventory-preview">
+                                Chưa có dữ liệu mới.
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-primary btn-full" style="margin-top: 10px;">Lưu Sản Phẩm</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- OTP App Note Modal -->
+        <div id="otp-note-modal" class="otp-note-modal-overlay hidden" onclick="app.closeOTPNoteModal(event)">
+            <div class="otp-note-modal" onclick="event.stopPropagation()">
+                <div class="otp-note-modal-header">
+                    <div class="otp-note-modal-title">
+                        <i class="fas fa-info-circle"></i>
+                        <span id="otp-note-modal-app-name">App</span>
+                    </div>
+                    <button class="btn-icon" onclick="app.closeOTPNoteModal()" style="color:var(--text-muted);font-size:1.2rem;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="otp-note-modal-body" id="otp-note-modal-body">
+                    <!-- Note content injected by JS -->
+                </div>
+                <div class="otp-note-modal-footer">
+                    <button class="btn-outline" onclick="app.closeOTPNoteModal()" style="flex:1;">Hủy</button>
+                    <button class="btn-primary btn-glow" id="otp-note-modal-confirm" onclick="app.confirmRentAfterNote()" style="flex:2;">
+                        <i class="fas fa-check-circle"></i> Đã đọc, Tiếp tục thuê
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- OTP Specific Phone Modal -->
+        <div id="otp-specific-modal" class="otp-note-modal-overlay hidden" onclick="app.closeSpecificPhoneModal(event)">
+            <div class="otp-note-modal" onclick="event.stopPropagation()">
+                <div class="otp-note-modal-header">
+                    <div class="otp-note-modal-title">
+                        <i class="fas fa-mobile-alt"></i>
+                        <span>Nhập số: <span id="otp-specific-modal-title">App</span></span>
+                    </div>
+                    <button class="btn-icon" onclick="app.closeSpecificPhoneModal()" style="color:var(--text-muted);font-size:1.2rem;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="otp-note-modal-body">
+                    <div style="margin-bottom:14px;color:var(--text-muted);font-size:0.9rem;">
+                        Nhập số điện thoại cụ thể bạn muốn thuê. Hệ thống sẽ kiểm tra kho và chỉ trừ tiền khi lấy được đúng số này.
+                    </div>
+                    <div class="form-group" style="margin-bottom:12px;">
+                        <label style="font-size:0.9rem;color:var(--text-muted);margin-bottom:6px;display:block;"><i class="fas fa-phone"></i> Số điện thoại</label>
+                        <input id="otp-specific-phone-input" type="tel" inputmode="numeric" maxlength="11"
+                            placeholder="0xxxxxxxxx"
+                            style="width:100%;padding:12px 15px;border-radius:8px;background:rgba(0,0,0,0.5);border:1px solid var(--primary);color:white;outline:none;font-size:1.1rem;letter-spacing:1px;box-sizing:border-box;"
+                            oninput="this.value=this.value.replace(/\D/g,'')"
+                            onkeydown="if(event.key==='Enter')app.confirmSpecificPhone()">
+                    </div>
+                    <div style="padding:10px 14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:10px;font-size:0.88rem;color:var(--text-muted);">
+                        <i class="fas fa-coins" style="color:var(--accent);margin-right:6px;"></i>
+                        Giá thuê: <strong id="otp-specific-modal-price" style="color:var(--accent);">0đ</strong>
+                        &bull; Tự động hoàn tiền nếu số không có trong kho hoặc không có OTP.
+                    </div>
+                </div>
+                <div class="otp-note-modal-footer">
+                    <button class="btn-outline" onclick="app.closeSpecificPhoneModal()" style="flex:1;">Hủy</button>
+                    <button class="btn-primary btn-glow" onclick="app.confirmSpecificPhone()" style="flex:2;">
+                        <i class="fas fa-check-circle"></i> Xác nhận thuê số này
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Account delivery modal -->
+        <div id="account-delivery-modal" class="account-delivery-overlay hidden"
+            onclick="app.closeAccountDeliveryModal(event)">
+            <section class="account-delivery-modal" role="dialog" aria-modal="true"
+                aria-labelledby="account-delivery-title" onclick="event.stopPropagation()">
+                <header class="account-delivery-header">
+                    <div>
+                        <span class="account-delivery-kicker">THÔNG TIN ĐÃ GIAO</span>
+                        <h3 id="account-delivery-title">Tài khoản của bạn</h3>
+                        <p id="account-delivery-subtitle"></p>
+                    </div>
+                    <button type="button" class="btn-icon" onclick="app.closeAccountDeliveryModal()"
+                        aria-label="Đóng"><i class="fas fa-times"></i></button>
+                </header>
+                <div id="account-delivery-timeline" class="order-timeline"></div>
+                <div id="account-delivery-content" class="account-delivery-content"></div>
+                <footer class="account-delivery-footer">
+                    <button type="button" class="btn-outline" id="account-delivery-copy-all">
+                        <i class="far fa-copy"></i> Sao chép tất cả
+                    </button>
+                    <button type="button" class="btn-primary" onclick="app.closeAccountDeliveryModal()">
+                        Hoàn tất
+                    </button>
+                </footer>
+            </section>
+        </div>
+
+        <!-- Admin customer login history modal -->
+        <div id="admin-login-history-modal" class="login-history-overlay hidden"
+            onclick="app.closeAdminLoginHistory(event)">
+            <section class="login-history-modal" role="dialog" aria-modal="true"
+                aria-labelledby="login-history-title" onclick="event.stopPropagation()">
+                <header class="login-history-header">
+                    <div>
+                        <span class="login-history-kicker">BẢO MẬT TÀI KHOẢN</span>
+                        <h3 id="login-history-title">Lịch sử đăng nhập</h3>
+                        <p id="login-history-subtitle"></p>
+                    </div>
+                    <button type="button" class="btn-icon" onclick="app.closeAdminLoginHistory()"
+                        aria-label="Đóng"><i class="fas fa-times"></i></button>
+                </header>
+                <div id="login-history-summary" class="login-history-summary"></div>
+                <div class="login-history-note">
+                    <i class="fas fa-circle-info"></i>
+                    Vị trí được ước tính theo IP nên có thể lệch thành phố, đặc biệt khi khách dùng VPN hoặc mạng di động.
+                </div>
+                <div id="login-history-list" class="login-history-list"></div>
+                <footer class="login-history-footer">
+                    <button type="button" class="btn-primary" onclick="app.closeAdminLoginHistory()">Đóng</button>
+                </footer>
+            </section>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loading" class="loading-overlay hidden">
+            <div class="spinner"></div>
+            <p>Đang xử lý giao dịch...</p>
+        </div>
+
+        <!-- Customer Chat Widget -->
+        <div id="chat-widget" class="chat-widget">
+            <button type="button" class="chat-toggle" onclick="app.toggleChat()" aria-label="Mở hỗ trợ khách hàng"
+                aria-controls="chat-window" aria-expanded="false">
+                <i class="fas fa-comments"></i>
+                <span class="chat-badge hidden" id="chat-badge">!</span>
+            </button>
+            <div class="chat-window hidden" id="chat-window">
+                <div class="chat-header">
+                    <div class="chat-header-main">
+                        <span class="chat-agent-icon"><i class="fas fa-headset"></i></span>
+                        <div>
+                            <h4>Hỗ trợ khách hàng</h4>
+                            <span class="chat-agent-status"><i></i> Admin phản hồi trực tiếp</span>
+                        </div>
+                    </div>
+                    <button type="button" onclick="app.toggleChat()" class="btn-icon" aria-label="Đóng cửa sổ chat"><i
+                            class="fas fa-times"></i></button>
+                </div>
+                <div class="chat-messages" id="customer-chat-messages">
+                    <div class="chat-msg msg-admin">Chào bạn! Mình có thể giúp gì cho bạn?</div>
+                </div>
+                <div class="chat-input-area" id="chat-input-container">
+                    <button type="button" class="btn-icon chat-image-btn" onclick="app.sendImagePrompt('user')"
+                        aria-label="Gửi hình ảnh"><i class="fas fa-image"></i></button>
+                    <input type="text" id="customer-chat-input" placeholder="Nhập tin nhắn (hỗ trợ Paste ảnh)..."
+                        onkeypress="if(event.key === 'Enter') app.sendMessage()"
+                        onpaste="app.handleChatPaste(event, 'user')">
+                    <button type="button" class="chat-send-btn" onclick="app.sendMessage()" aria-label="Gửi tin nhắn"><i
+                            class="fas fa-paper-plane"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Điều hướng nhanh trên điện thoại">
+        <button type="button" data-mobile-nav="home" class="active" onclick="app.mobileNavigate('home')">
+            <i class="fas fa-house"></i><span>Trang chủ</span>
+        </button>
+        <button type="button" data-mobile-nav="products" onclick="app.mobileNavigate('products')">
+            <i class="fas fa-store"></i><span>Sản phẩm</span>
+        </button>
+        <button type="button" data-mobile-nav="otp" onclick="app.mobileNavigate('otp')">
+            <i class="fas fa-mobile-screen-button"></i><span>OTP</span>
+        </button>
+        <button type="button" data-mobile-nav="orders" onclick="app.mobileNavigate('orders')">
+            <i class="fas fa-receipt"></i><span>Đơn hàng</span>
+        </button>
+        <button type="button" data-mobile-nav="account" onclick="app.mobileNavigate('account')">
+            <i class="fas fa-user"></i><span>Tài khoản</span>
+        </button>
+    </nav>
+
+    <!-- Firebase SDK (v8 Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+    <!-- EmailJS SDK -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <!-- VanillaTilt SDK cho hiệu ứng 3D -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vanilla-tilt/1.8.1/vanilla-tilt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="app.js?v=56"></script>
+    <div class="site-warning-ticker" aria-label="Cảnh báo sử dụng dịch vụ">
+        <div class="site-warning-track">
+            <span>NGHIÊM CẤM DÙNG MỤC ĐÍCH LỪA ĐẢO, VI PHẠM PHÁP LUẬT (CHÚNG TÔI SẼ KHÓA TÀI KHOẢN VÀ GIAM TIỀN VĨNH VIỄN)</span>
+            <span>NGHIÊM CẤM DÙNG MỤC ĐÍCH LỪA ĐẢO, VI PHẠM PHÁP LUẬT (CHÚNG TÔI SẼ KHÓA TÀI KHOẢN VÀ GIAM TIỀN VĨNH VIỄN)</span>
+            <span>NGHIÊM CẤM DÙNG MỤC ĐÍCH LỪA ĐẢO, VI PHẠM PHÁP LUẬT (CHÚNG TÔI SẼ KHÓA TÀI KHOẢN VÀ GIAM TIỀN VĨNH VIỄN)</span>
+        </div>
+        <button type="button" class="site-warning-toggle" onclick="app.toggleSiteWarning()"
+            aria-label="Thu gọn cảnh báo" aria-expanded="true" title="Thu gọn cảnh báo">
+            <i class="fas fa-chevron-down"></i>
+        </button>
+    </div>
+</body>
+
+</html>
