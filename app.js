@@ -7177,6 +7177,52 @@ const app = {
     parseDeliveredAccount: function (rawValue, accountIndex, sourceRawValue = rawValue) {
         const raw = String(rawValue || '').trim();
         const sourceRaw = String(sourceRawValue ?? rawValue ?? '');
+        const isSensitiveLabel = label => /pass|mat khau|password|recovery|backup|khoi phuc|2fa|secret|ma du phong|token|cookie/
+            .test(this.normalizeText(label));
+
+        // Một số nguồn đặt nhiều giá trị trong `username`, còn `note` lại chứa tên
+        // các cột tương ứng, ví dụ Mail|Pass mail|Pass Capcut. Ghép chúng trước khi
+        // dùng bộ tách mặc định để tránh biến tên cột thành nhiều ô "Ghi chú".
+        try {
+            const sourceObject = JSON.parse(sourceRaw);
+            if (sourceObject && typeof sourceObject === 'object' && !Array.isArray(sourceObject)) {
+                const entries = Object.entries(sourceObject);
+                const getSourceValue = keys => {
+                    const wanted = new Set(keys.map(key => key.toLowerCase().replace(/[^a-z0-9]/g, '')));
+                    const match = entries.find(([key]) => wanted.has(String(key).toLowerCase().replace(/[^a-z0-9]/g, '')));
+                    return match ? match[1] : undefined;
+                };
+                const splitSourceParts = value => {
+                    if (value === undefined || value === null || typeof value === 'object') return [];
+                    return String(value).split(/\s*\|\s*|\t+|\r?\n/).map(part => part.trim()).filter(Boolean);
+                };
+
+                const sourceValues = [
+                    ...splitSourceParts(getSourceValue(['username', 'email', 'login', 'user', 'account', 'value', 'id'])),
+                    ...splitSourceParts(getSourceValue(['password', 'pass'])),
+                    ...splitSourceParts(getSourceValue(['twofa', 'two_fa', '2fa', 'recovery', 'recovery_email', 'secret']))
+                ];
+                const sourceLabels = splitSourceParts(getSourceValue(['note', 'format', 'labels', 'columns']));
+                const labelsLookLikeColumns = sourceLabels.length >= 2
+                    && sourceLabels.length === sourceValues.length
+                    && sourceLabels.every(label => label.length <= 40)
+                    && sourceLabels.some(label => /mail|email|pass|mat khau|password|tai khoan|account|user|login|2fa|otp|recovery|khoi phuc|cookie|token|capcut/
+                        .test(this.normalizeText(label)));
+
+                if (labelsLookLikeColumns) {
+                    const fields = sourceLabels.map((label, fieldIndex) => ({
+                        id: `delivery-field-${accountIndex}-${fieldIndex}`,
+                        label,
+                        value: sourceValues[fieldIndex],
+                        sensitive: isSensitiveLabel(label)
+                    }));
+                    return { raw: sourceRaw, parsedRaw: raw, fields };
+                }
+            }
+        } catch (_) {
+            // Dữ liệu không phải JSON: tiếp tục xử lý chuỗi phân cách thông thường.
+        }
+
         let parts = raw.split(/\s*\|\s*|\t+|\r?\n/).map(value => value.trim()).filter(Boolean);
         if (parts.length === 1 && raw.includes(':')) {
             const colonParts = raw.split(':').map(value => value.trim()).filter(Boolean);
@@ -7196,7 +7242,7 @@ const app = {
                 else if (/email|tai khoan|username|user|login|id/.test(key)) label = 'Tài khoản / Email';
                 else label = explicit[1].trim();
             }
-            const sensitive = label === 'Mật khẩu' || label === 'Mã khôi phục';
+            const sensitive = isSensitiveLabel(label);
             return {
                 id: `delivery-field-${accountIndex}-${fieldIndex}`,
                 label,
