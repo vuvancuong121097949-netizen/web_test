@@ -10,35 +10,68 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@700;800;900&family=Inter:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=78">
+    <link rel="stylesheet" href="style.css?v=80">
+    <link rel="stylesheet" href="homepage-v2.css?v=30">
+    <link rel="stylesheet" href="admin-v2.css?v=1">
+    <link rel="stylesheet" href="dashboard-v2.css?v=2">
+    <link rel="stylesheet" href="product-detail-v2.css?v=2">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-    <link rel="icon" type="image/png" href="https://i.ibb.co/cSw3Zt1t/logo-web.png">
+    <link rel="icon" type="image/png" href="https://i.ibb.co/B2JLbBWX/tyjujiutytrrr.png">
 </head>
 
 <body>
-    <canvas id="ambient-network-canvas" aria-hidden="true"></canvas>
     <div id="app">
         <!-- Header -->
         <header class="glass-header">
             <div class="container header-container">
                 <a href="javascript:void(0)" class="logo" onclick="app.navigate('home');return false;">
-                    <img class="site-img-logo site-img-logo-light" src="assets/logo-motion.svg?v=9" alt="Tài Khoản Xịn">
-                    <img class="site-img-logo site-img-logo-dark" src="assets/logo-motion-dark.svg?v=2" alt="Tài Khoản Xịn">
+                    <img class="site-img-logo site-img-logo-brand" src="assets/logo-taikhoanxin.png?v=1" alt="Tài Khoản Xịn" fetchpriority="high">
                 </a>
+                <form class="desktop-header-search" onsubmit="app.submitHeaderProductSearch(event)" role="search">
+                    <input id="header-product-search" type="search" placeholder="Nhập từ khóa sản phẩm..."
+                        aria-label="Tìm kiếm sản phẩm" autocomplete="off">
+                    <button type="submit" aria-label="Tìm kiếm"><i class="fas fa-search"></i></button>
+                </form>
                 <button type="button" class="mobile-utility-toggle" id="mobile-utility-toggle"
                     onclick="app.toggleMobileUtilityMenu()" aria-label="Mở menu tiện ích"
                     aria-controls="header-actions" aria-expanded="false">
                     <i class="fas fa-bars"></i>
                 </button>
+                <button type="button" class="mobile-header-action mobile-header-search"
+                    onclick="app.focusHomeProductSearch()" aria-label="Tìm kiếm sản phẩm">
+                    <i class="fas fa-search"></i>
+                </button>
+                <button type="button" class="mobile-header-action mobile-header-products"
+                    onclick="app.mobileNavigate('products')" aria-label="Xem sản phẩm">
+                    <i class="fas fa-shopping-cart"></i>
+                </button>
                 <div class="header-actions" id="header-actions">
+                    <div class="mobile-menu-heading">
+                        <strong>Menu</strong>
+                        <button type="button" onclick="app.closeMobileUtilityMenu()" aria-label="Đóng menu">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <button type="button" class="mobile-drawer-link" onclick="app.mobileNavigate('home')">
+                        <i class="fas fa-house"></i><span>Trang chủ</span>
+                    </button>
+                    <button type="button" class="mobile-drawer-link" onclick="app.mobileNavigate('products')">
+                        <i class="fas fa-store"></i><span>Sản phẩm</span>
+                    </button>
+                    <button type="button" class="mobile-drawer-link" onclick="app.mobileNavigate('otp')">
+                        <i class="fas fa-mobile-screen-button"></i><span>Thuê số OTP</span>
+                    </button>
+                    <button type="button" class="mobile-drawer-link" onclick="app.mobileNavigate('orders')">
+                        <i class="fas fa-receipt"></i><span>Đơn hàng</span>
+                    </button>
                     <a href="javascript:void(0)" id="nav-guest-1" class="header-login"
                         onclick="app.navigate('login');app.closeMobileMenu();return false;">Đăng nhập</a>
                     <a href="javascript:void(0)" id="nav-guest-2" class="btn-primary header-register"
                         onclick="app.navigate('register');app.closeMobileMenu();return false;">Đăng ký</a>
                     <a href="javascript:void(0)" id="nav-notifications" class="header-icon-btn hidden"
                         onclick="app.navigate('notifications');app.closeMobileMenu();return false;" aria-label="Thông báo"><i
-                            class="fas fa-bell"></i> <span id="nav-notification-badge"
+                            class="fas fa-bell"></i><span class="mobile-menu-label">Thông báo</span> <span id="nav-notification-badge"
                             class="badge hidden">0</span></a>
                     <a href="javascript:void(0)" id="nav-user-1" class="header-login hidden"
                         onclick="app.navigate('dashboard');app.closeMobileMenu();return false;" aria-label="Tài khoản"><i class="fas fa-user"></i>
@@ -49,19 +82,30 @@
                         onclick="app.navigate('deposit');app.closeMobileMenu();return false;"><i class="fas fa-wallet"></i>
                         <span id="nav-balance">0đ</span></a>
                     <a href="javascript:void(0)" id="nav-admin" class="header-icon-btn hidden"
-                        onclick="app.navigate('admin');app.closeMobileMenu();return false;" aria-label="Quản trị"><i class="fas fa-user-shield"></i></a>
+                        onclick="app.navigate('admin');app.closeMobileMenu();return false;" aria-label="Quản trị"><i class="fas fa-user-shield"></i><span class="mobile-menu-label">Quản trị</span></a>
                     <a href="javascript:void(0)" id="nav-user-2" class="header-login hidden"
-                        onclick="app.logout();return false;" aria-label="Đăng xuất">Đăng xuất</a>
+                        onclick="app.logout();return false;" aria-label="Đăng xuất"><i class="fas fa-right-from-bracket"></i><span class="mobile-menu-label">Đăng xuất</span></a>
                     <button type="button" class="header-icon-btn" onclick="app.toggleTheme();return false;" id="theme-toggle-btn"
-                        title="Đổi giao diện Sáng/Tối" aria-label="Đổi giao diện Sáng/Tối"><i class="fas fa-moon"></i></button>
-                    <button class="header-cart-btn" type="button" aria-label="Xem sản phẩm"
-                        onclick="app.navigate('home');document.getElementById('products-section')?.scrollIntoView({behavior:'smooth'});">
+                        title="Đổi giao diện Sáng/Tối" aria-label="Đổi giao diện Sáng/Tối"><i class="fas fa-moon"></i><span class="mobile-menu-label">Đổi giao diện</span></button>
+                    <button class="header-cart-btn" type="button" aria-label="Mở giỏ hàng"
+                        onclick="app.openCart();">
                         <i class="fas fa-shopping-cart"></i>
                         <span id="header-cart-count">0</span>
                     </button>
                 </div>
             </div>
         </header>
+        <button type="button" class="mobile-menu-backdrop" onclick="app.closeMobileUtilityMenu()"
+            aria-label="Đóng menu"></button>
+        <nav class="desktop-utility-nav" aria-label="Điều hướng dịch vụ">
+            <div class="container desktop-utility-nav-inner">
+                <button type="button" onclick="app.mobileNavigate('products')"><i class="fas fa-bars"></i> Danh mục sản phẩm</button>
+                <button type="button" onclick="app.mobileNavigate('otp')"><i class="fas fa-mobile-screen-button"></i> Thuê số OTP</button>
+                <button type="button" onclick="app.mobileNavigate('orders')"><i class="fas fa-receipt"></i> Đơn hàng</button>
+                <button type="button" onclick="app.navigate('deposit')"><i class="fas fa-wallet"></i> Nạp tiền</button>
+                <button type="button" onclick="app.mobileNavigate('account')"><i class="fas fa-user"></i> Tài khoản</button>
+            </div>
+        </nav>
 
         <!-- Main Content Area -->
         <main class="container">
@@ -74,61 +118,20 @@
                         <div class="hero-orb hero-orb-2"></div>
                         <div class="hero-content">
                             <h1>
-                                <span class="hero-heading-kicker">DỊCH VỤ SỐ</span><br>
                                 <span class="hero-feature-title" id="hero-typing-text"
                                     aria-label="TÀI KHOẢN &amp; THUÊ OTP">TÀI KHOẢN &amp; THUÊ OTP</span>
                             </h1>
                         </div>
 
-                        <div class="hero-visual" aria-hidden="true">
-                            <img class="hero-bag-image" src="assets/hero-bag.png" alt="">
-                            <span class="app-bubble hero-brand-bubble bubble-netflix" title="Adobe">
-                                <img class="hero-brand-logo" src="https://i.ibb.co/mCHY4hph/adobe-logo.png" alt="">
-                            </span>
-                            <span class="app-bubble hero-brand-bubble bubble-spotify" title="Canva">
-                                <img class="hero-brand-logo" src="https://i.ibb.co/q3BdB8J1/canva-logo.png" alt="">
-                            </span>
-                            <span class="app-bubble hero-brand-bubble bubble-youtube" title="ChatGPT">
-                                <img class="hero-brand-logo" src="https://i.ibb.co/ks9JnkBc/chatgpt-logo.png" alt="">
-                            </span>
-                            <span class="app-bubble hero-brand-bubble bubble-canva" title="Gemini">
-                                <img class="hero-brand-logo" src="https://i.ibb.co/nKYxFT1/GEMINI-LOGO.png" alt="">
-                            </span>
-                            <span class="app-bubble hero-brand-bubble bubble-ai" title="CapCut">
-                                <img class="hero-brand-logo" src="https://i.ibb.co/5WWRJF94/capcut-logo.png" alt="">
-                            </span>
-                            <span class="app-bubble hero-brand-bubble bubble-office" title="Office 365">
-                                <img class="hero-brand-logo"
-                                    src="https://upload.wikimedia.org/wikipedia/commons/0/0e/Microsoft_365_%282022%29.svg" alt="">
-                            </span>
-                        </div>
                     </section>
 
-                    <aside class="home-sidebar" aria-label="Tổng quan dịch vụ">
-                        <div class="popular-services-card">
-                            <div class="home-card-title">
-                                <h2>Dịch vụ phổ biến</h2>
-                                <button type="button" onclick="document.getElementById('products-section').scrollIntoView({behavior:'smooth'})">Xem tất cả</button>
-                            </div>
-                            <div id="home-popular-list" class="home-popular-list">
-                                <!-- JS injected -->
-                            </div>
-                        </div>
-                    </aside>
                 </div>
 
                 <div class="service-discovery-row">
-                    <section class="otp-spotlight" aria-label="Dịch vụ OTP">
-                        <div class="otp-spotlight-heading">
-                            <span class="otp-spotlight-icon"><i class="fas fa-comment-dots"></i></span>
-                            <span class="otp-spotlight-badge">DỊCH VỤ RIÊNG</span>
-                        </div>
-                        <strong>Thuê số OTP</strong>
-                        <small>Tự động, nhận mã nhanh</small>
-                        <button type="button" onclick="app.navigate('otp')">
-                            Thuê ngay <i class="fas fa-arrow-right"></i>
-                        </button>
-                    </section>
+                    <button type="button" class="otp-spotlight otp-spotlight-compact"
+                        onclick="app.navigate('otp')" aria-label="Mở dịch vụ thuê số OTP">
+                        <span>Thuê Số OTP</span>
+                    </button>
                 </div>
 
                 <!-- Banner Quảng Cáo -->
@@ -139,11 +142,12 @@
                 <div id="products-section" class="products-section">
                     <div class="home-section-bar">
                         <div>
-                            <h2>Tất cả sản phẩm</h2>
-                            <p>Tìm nhanh theo danh mục, nguồn giao và mức giá phù hợp</p>
+                            <h2>Sản phẩm nổi bật</h2>
                         </div>
-                        <button type="button" onclick="app.resetProductFilters(true)">Đặt lại bộ lọc</button>
+                        <button type="button" onclick="app.resetProductFilters(true)">Xem tất cả</button>
                     </div>
+
+                    <div class="product-category-tabs product-category-tabs-inline" aria-label="Lọc theo danh mục"></div>
 
                     <!-- Thanh tìm kiếm sản phẩm -->
                     <div class="product-search-bar" id="product-search-bar">
@@ -175,6 +179,22 @@
                     </div>
                 </div>
 
+            </section>
+
+            <!-- Product Detail View -->
+            <section id="view-product-detail" class="view">
+                <div class="product-detail-topbar">
+                    <button type="button" onclick="app.backToProducts()">
+                        <i class="fas fa-arrow-left"></i><span>Quay lại sản phẩm</span>
+                    </button>
+                    <span id="product-detail-category">Chi tiết sản phẩm</span>
+                </div>
+                <div id="product-detail-content" aria-live="polite">
+                    <div class="product-detail-route-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <strong>Đang tải sản phẩm...</strong>
+                    </div>
+                </div>
             </section>
 
             <!-- Login View -->
@@ -537,36 +557,27 @@
                         <p>Xin chào, <span id="user-display-name" class="text-gradient font-bold"></span>!</p>
                     </div>
                     <div class="dashboard-layout">
-                        <!-- Sidebar Nav -->
-                        <div class="dashboard-sidebar">
-                            <button class="dash-nav-item active" onclick="app.scrollDashSection('section-orders',this)"><i
-                                    class="fas fa-shopping-bag"></i> Đơn hàng</button>
-                            <button class="dash-nav-item" onclick="app.scrollDashSection('section-otp',this)"><i
-                                    class="fas fa-mobile-alt"></i> Lịch sử OTP</button>
-                            <button class="dash-nav-item" onclick="app.scrollDashSection('section-deposits',this)"><i
-                                    class="fas fa-wallet"></i> Nạp tiền</button>
-                            <button class="dash-nav-item" onclick="app.scrollDashSection('section-settings',this)"><i
-                                    class="fas fa-cog"></i> Thiết lập</button>
-                        </div>
-                        <!-- Main Content -->
-                        <div>
-                            <div class="dashboard-content glass-card" id="section-settings"
-                                style="margin-bottom: 20px;">
-                                <h3>Thiết lập tài khoản</h3>
-                                <div class="form-group" style="max-width: 400px; margin-top: 15px;">
-                                    <label for="profile-email"><i class="fas fa-envelope"></i> Email bảo mật</label>
-                                    <div style="display: flex; gap: 10px;">
-                                        <input type="email" id="profile-email"
-                                            placeholder="Nhập email của bạn (để khôi phục MK)">
-                                        <button class="btn-primary" onclick="app.updateProfileEmail()">Lưu</button>
-                                    </div>
-                                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">Thêm email
-                                        để có
-                                        thể sử dụng chức năng Quên mật khẩu.</p>
-                                </div>
+                        <!-- Compact history navigation -->
+                        <nav class="dashboard-sidebar" aria-label="Điều hướng lịch sử tài khoản">
+                            <button type="button" class="dashboard-nav-toggle" aria-expanded="false"
+                                aria-controls="dashboard-nav-items" onclick="app.toggleDashboardNav(this)">
+                                <span><i class="fas fa-bars"></i><strong id="dashboard-nav-current">Đơn hàng</strong></span>
+                                <i class="fas fa-chevron-down dashboard-nav-chevron" aria-hidden="true"></i>
+                            </button>
+                            <div class="dashboard-nav-items" id="dashboard-nav-items" role="tablist">
+                                <button type="button" id="dash-tab-orders" class="dash-nav-item active" role="tab" aria-selected="true" aria-controls="section-orders" data-dashboard-section="section-orders" onclick="app.scrollDashSection('section-orders',this)"><i
+                                        class="fas fa-shopping-bag"></i> Đơn hàng</button>
+                                <button type="button" id="dash-tab-otp" class="dash-nav-item" role="tab" aria-selected="false" aria-controls="section-otp" data-dashboard-section="section-otp" onclick="app.scrollDashSection('section-otp',this)"><i
+                                        class="fas fa-mobile-alt"></i> Lịch sử OTP</button>
+                                <button type="button" id="dash-tab-deposits" class="dash-nav-item" role="tab" aria-selected="false" aria-controls="section-deposits" data-dashboard-section="section-deposits" onclick="app.scrollDashSection('section-deposits',this)"><i
+                                        class="fas fa-wallet"></i> Lịch sử nạp tiền</button>
+                                <button type="button" id="dash-tab-settings" class="dash-nav-item" role="tab" aria-selected="false" aria-controls="section-settings" data-dashboard-section="section-settings" onclick="app.scrollDashSection('section-settings',this)"><i
+                                        class="fas fa-cog"></i> Thiết lập</button>
                             </div>
-
-                            <div class="dashboard-content glass-card" id="section-orders">
+                        </nav>
+                        <!-- Main Content -->
+                        <div class="dashboard-history-stack">
+                            <div class="dashboard-content glass-card dashboard-account-panel is-active" id="section-orders" role="tabpanel" aria-labelledby="dash-tab-orders">
                                 <h3>Lịch sử mua hàng & Tài khoản đã cấp</h3>
                                 <div class="table-responsive">
                                     <table class="orders-table">
@@ -593,7 +604,7 @@
                                 </div>
                             </div>
 
-                            <div class="dashboard-content glass-card" id="section-otp" style="margin-top: 20px;">
+                            <div class="dashboard-content glass-card dashboard-account-panel" id="section-otp" role="tabpanel" aria-labelledby="dash-tab-otp" hidden style="margin-top: 20px;">
                                 <h3>Lịch sử thuê OTP</h3>
                                 <div class="table-responsive">
                                     <table class="orders-table">
@@ -621,7 +632,7 @@
                                 </div>
                             </div>
 
-                            <div class="dashboard-content glass-card" id="section-deposits" style="margin-top: 20px;">
+                            <div class="dashboard-content glass-card dashboard-account-panel" id="section-deposits" role="tabpanel" aria-labelledby="dash-tab-deposits" hidden style="margin-top: 20px;">
                                 <h3>Lịch sử Nạp tiền</h3>
                                 <div class="table-responsive">
                                     <table class="orders-table">
@@ -644,6 +655,21 @@
                                     <button class="btn-outline" onclick="app.navigate('deposit')"
                                         style="margin-top: 10px;">Nạp
                                         tiền ngay</button>
+                                </div>
+                            </div>
+
+                            <div class="dashboard-content glass-card dashboard-account-panel" id="section-settings" role="tabpanel" aria-labelledby="dash-tab-settings" hidden
+                                style="margin-top: 20px;">
+                                <h3>Thiết lập tài khoản</h3>
+                                <div class="form-group" style="max-width: 520px; margin-top: 15px;">
+                                    <label for="profile-email"><i class="fas fa-envelope"></i> Email bảo mật</label>
+                                    <div class="dashboard-email-row">
+                                        <input type="email" id="profile-email"
+                                            placeholder="Nhập email của bạn (để khôi phục MK)">
+                                        <button class="btn-primary" onclick="app.updateProfileEmail()">Lưu</button>
+                                    </div>
+                                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">Thêm email
+                                        để có thể sử dụng chức năng Quên mật khẩu.</p>
                                 </div>
                             </div>
                         </div>
@@ -901,11 +927,11 @@
                         <section class="dashboard-content glass-card provider-vault-shell" aria-labelledby="provider-vault-title">
                             <header class="provider-vault-heading">
                                 <div>
-                                    <span class="provider-vault-kicker"><i class="fas fa-shield-halved"></i> KÉT API NHÀ CUNG CẤP</span>
-                                    <h3 id="provider-vault-title">Thêm API key ngay trong trang quản trị</h3>
+                                    <span class="provider-vault-kicker"><i class="fas fa-plug-circle-check"></i> NGUỒN API NHÀ CUNG CẤP</span>
+                                    <h3 id="provider-vault-title">Quản lý nguồn API</h3>
                                     <p>Key được mã hóa tại Netlify trước khi lưu Firebase. Trình duyệt không thể đọc lại key thật.</p>
                                 </div>
-                                <span id="provider-vault-status" class="provider-vault-status is-loading">Đang kiểm tra két khóa…</span>
+                                <span id="provider-vault-status" class="provider-vault-status is-loading">Đang kiểm tra kết nối…</span>
                             </header>
 
                             <div class="provider-security-strip" aria-label="Cách bảo vệ API key">
@@ -935,27 +961,9 @@
                                 </div>
                             </div>
 
-                            <form id="provider-vault-auth" class="provider-vault-auth hidden" onsubmit="app.adminUnlockProviderVault(event)">
-                                <div class="provider-auth-copy">
-                                    <i class="fas fa-user-shield"></i>
-                                    <div><strong>Xác minh quản trị</strong><span>Nhập lại mật khẩu admin để mở két trong 2 giờ.</span></div>
-                                </div>
-                                <div class="provider-auth-controls">
-                                    <input type="password" id="provider-admin-password" autocomplete="current-password"
-                                        placeholder="Mật khẩu tài khoản admin" aria-label="Mật khẩu quản trị">
-                                    <button type="submit" id="provider-unlock-button" class="btn-primary">
-                                        <i class="fas fa-lock-open"></i> Xác minh &amp; mở két
-                                    </button>
-                                </div>
-                                <p id="provider-auth-error" class="provider-form-error" role="alert"></p>
-                            </form>
-
                             <div id="provider-vault-manager" class="provider-vault-manager hidden">
                                 <div class="provider-session-bar">
-                                    <span id="provider-session-label"><i class="fas fa-circle-check"></i> Phiên quản lý đang được bảo vệ</span>
-                                    <button type="button" id="provider-lock-button" class="btn-outline" onclick="app.adminLockProviderVault()">
-                                        <i class="fas fa-lock"></i> Khóa két
-                                    </button>
+                                    <span id="provider-session-label"><i class="fas fa-circle-check"></i> Đã xác thực bằng phiên đăng nhập quản trị</span>
                                 </div>
 
                                 <form id="provider-source-form" class="provider-source-form" onsubmit="app.adminSaveProvider(event)">
@@ -1292,19 +1300,6 @@
                             </div>
                         </div>
 
-                        <div class="dashboard-content glass-card" style="margin-bottom:20px;">
-                            <h3>Quản Lý Banners <i class="fas fa-images"></i></h3>
-                            <form id="admin-add-banner-form" onsubmit="app.adminAddBanner(event)"
-                                style="display:flex;gap:10px;flex-wrap:wrap;margin:15px 0;background:rgba(0,0,0,0.2);padding:15px;border-radius:10px;">
-                                <input type="url" id="admin-banner-img" placeholder="URL Hình ảnh Banner" required
-                                    style="flex:2;min-width:200px;">
-                                <input type="url" id="admin-banner-link" placeholder="Link đích (Tùy chọn)"
-                                    style="flex:2;min-width:200px;">
-                                <button type="submit" class="btn-primary" style="flex:1;min-width:120px;"><i
-                                        class="fas fa-plus"></i> Thêm</button>
-                            </form>
-                            <div id="admin-banners-list" style="display:flex;flex-direction:column;gap:10px;"></div>
-                        </div>
                         <div class="dashboard-content glass-card">
                             <h3>Quản Lý Thông Báo <i class="fas fa-bullhorn"></i></h3>
                             <form id="admin-add-notification-form" onsubmit="app.adminAddNotification(event)"
@@ -1366,8 +1361,7 @@
             <div class="container footer-content">
                 <div class="footer-logo">
                     <a href="javascript:void(0)" class="logo" onclick="app.navigate('home');return false;">
-                        <img class="site-img-logo site-img-logo-light" src="assets/logo-motion.svg?v=9" alt="Tài Khoản Xịn">
-                        <img class="site-img-logo site-img-logo-dark" src="assets/logo-motion-dark.svg?v=2" alt="Tài Khoản Xịn">
+                        <img class="site-img-logo site-img-logo-brand" src="assets/logo-taikhoanxin.png?v=1" alt="Tài Khoản Xịn" loading="lazy">
                     </a>
                 </div>
                 <div class="footer-links">
@@ -1532,7 +1526,7 @@
                                 </button>
                             </div>
                             <p class="inventory-help">
-                                Chọn một nguồn đã lưu trong Két API, sau đó chọn đúng sản phẩm gốc. Khi khách thanh toán,
+                                Chọn một nguồn đã lưu trong danh sách Nguồn API, sau đó chọn đúng sản phẩm gốc. Khi khách thanh toán,
                                 Netlify sẽ gọi API nguồn và giao tài khoản ngay trong lịch sử đơn.
                             </p>
                             <div class="provider-product-picker-grid">
@@ -1743,7 +1737,7 @@
     <!-- VanillaTilt SDK cho hiệu ứng 3D -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vanilla-tilt/1.8.1/vanilla-tilt.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="app.js?v=56"></script>
+    <script src="app.js?v=74"></script>
     <div class="site-warning-ticker" aria-label="Cảnh báo sử dụng dịch vụ">
         <div class="site-warning-track">
             <span>NGHIÊM CẤM DÙNG MỤC ĐÍCH LỪA ĐẢO, VI PHẠM PHÁP LUẬT (CHÚNG TÔI SẼ KHÓA TÀI KHOẢN VÀ GIAM TIỀN VĨNH VIỄN)</span>

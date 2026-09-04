@@ -3,9 +3,8 @@ const path = require('path');
 
 const projectRoot = path.resolve(__dirname, '..');
 const outputDir = path.join(projectRoot, 'dist');
-const publicFiles = ['index.html', 'app.js', 'style.css', '_redirects'];
+const publicFiles = ['index.html', 'app.js', 'style.css', 'homepage-v2.css', 'admin-v2.css', 'dashboard-v2.css', 'product-detail-v2.css', '_redirects'];
 
-fs.rmSync(outputDir, { recursive: true, force: true });
 fs.mkdirSync(outputDir, { recursive: true });
 
 for (const filename of publicFiles) {
@@ -16,7 +15,7 @@ for (const filename of publicFiles) {
 
 const assetsSource = path.join(projectRoot, 'assets');
 if (fs.existsSync(assetsSource)) {
-    fs.cpSync(assetsSource, path.join(outputDir, 'assets'), { recursive: true });
+    fs.cpSync(assetsSource, path.join(outputDir, 'assets'), { recursive: true, force: true });
 }
 
 console.log(`Đã chuẩn bị ${outputDir} chỉ với các tệp website công khai.`);

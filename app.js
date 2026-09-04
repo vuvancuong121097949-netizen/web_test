@@ -56,6 +56,14 @@ const app = {
     productSort: 'default',
     productSourceFilter: 'all',
     productCategoryFilter: 'all',
+    dashboardActiveSection: 'section-orders',
+    productsLoaded: false,
+    pendingProductRouteKey: '',
+    PROVIDER_STOCK_SYNC_INTERVAL_MS: 5 * 1000,
+    PROVIDER_STOCK_REQUEST_TIMEOUT_MS: 12 * 1000,
+    providerStockSyncTimer: null,
+    providerStockSyncRequest: null,
+    providerStockSyncQueued: false,
     DEPOSIT_EXPIRE_MS: 15 * 60 * 1000,
     depositCountdownTimer: null,
     adminFilters: {
@@ -96,6 +104,7 @@ const app = {
             this.listenToSettings();
             this.listenToProductCategories();
             this.listenToProducts();
+            this.startProviderStockSync();
             this.listenToNotifications();
             this.loadOTPConfigFromFirebase();
             this.loadSelectedAppsFromFirebase();
@@ -103,7 +112,9 @@ const app = {
 
         // Theo dõi sự kiện back/forward của trình duyệt
         window.addEventListener('popstate', (event) => {
-            if (event.state && event.state.view) {
+            if (event.state?.view === 'product-detail' && event.state.productId) {
+                this.openProductDetail(event.state.productId, false);
+            } else if (event.state && event.state.view) {
                 this.navigate(event.state.view, false);
             } else {
                 this.handleInitialRoute();
@@ -133,9 +144,9 @@ const app = {
             const icon = document.querySelector('#theme-toggle-btn i');
             if (icon) { icon.classList.remove('fa-moon'); icon.classList.add('fa-sun'); }
         }
+        this.syncCartCount();
         this.initScrollReveal();
         this.initTiltEffects();
-        this.initAmbientNetwork();
         this.initProductEdgeEffects();
         this.initLogoMotion();
         this.initButtonMotion();
@@ -376,10 +387,11 @@ const app = {
     initButtonMotion: function () {
         if (this._buttonMotionReady) return;
         this._buttonMotionReady = true;
-        let pressed = null;
-        const findAction = target => target?.closest?.(
-            'button, .btn-primary, .btn-outline, .btn-large, .order-account-action'
-        );
+        const findAction = target => {
+            const btn = target?.closest?.('button, .btn-primary, .btn-outline, .btn-large, .order-account-action');
+            if (!btn || btn.classList.contains('pg-btn') || btn.closest('.pagination-bar')) return null;
+            return btn;
+        };
         const release = () => {
             if (!pressed) return;
             const button = pressed;
@@ -490,6 +502,7 @@ const app = {
         const button = document.getElementById('mobile-utility-toggle');
         if (!menu || !button) return;
         const isOpen = menu.classList.toggle('mobile-open');
+        document.body.classList.toggle('mobile-menu-open', isOpen);
         button.classList.toggle('active', isOpen);
         button.setAttribute('aria-expanded', String(isOpen));
         button.setAttribute('aria-label', isOpen ? 'Đóng menu tiện ích' : 'Mở menu tiện ích');
@@ -501,6 +514,7 @@ const app = {
         const menu = document.getElementById('header-actions');
         const button = document.getElementById('mobile-utility-toggle');
         if (menu) menu.classList.remove('mobile-open');
+        document.body.classList.remove('mobile-menu-open');
         if (button) {
             button.classList.remove('active');
             button.setAttribute('aria-expanded', 'false');
@@ -515,7 +529,9 @@ const app = {
     },
 
     updateMobileBottomNav: function (activeKey) {
-        const normalizedKey = activeKey === 'dashboard' ? 'orders' : activeKey;
+        const normalizedKey = activeKey === 'dashboard'
+            ? (this.dashboardActiveSection === 'section-settings' ? 'account' : 'orders')
+            : activeKey;
         document.querySelectorAll('[data-mobile-nav]').forEach(button => {
             button.classList.toggle('active', button.dataset.mobileNav === normalizedKey);
         });
@@ -542,7 +558,8 @@ const app = {
             this.updateMobileBottomNav(target);
             requestAnimationFrame(() => {
                 const sectionId = target === 'orders' ? 'section-orders' : 'section-settings';
-                document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                const sectionButton = document.querySelector(`.dash-nav-item[data-dashboard-section="${sectionId}"]`);
+                this.scrollDashSection(sectionId, sectionButton);
             });
             return;
         }
@@ -551,10 +568,35 @@ const app = {
         this.updateMobileBottomNav(target);
     },
 
+    focusHomeProductSearch: function () {
+        this.navigate('home');
+        this.updateMobileBottomNav('products');
+        requestAnimationFrame(() => {
+            const section = document.getElementById('products-section');
+            const input = document.getElementById('product-search-input');
+            section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setTimeout(() => input?.focus({ preventScroll: true }), 350);
+        });
+    },
+
+    submitHeaderProductSearch: function (event) {
+        event?.preventDefault();
+        const headerInput = document.getElementById('header-product-search');
+        const keyword = String(headerInput?.value || '').trim();
+        this.navigate('home');
+        this.updateMobileBottomNav('products');
+        requestAnimationFrame(() => {
+            const productInput = document.getElementById('product-search-input');
+            if (productInput) productInput.value = keyword;
+            this.searchProducts(keyword);
+            document.getElementById('products-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    },
+
     restoreSiteWarningState: function () {
-        const savedState = sessionStorage.getItem('site_warning_collapsed');
-        const isMobile = window.matchMedia && window.matchMedia('(max-width: 600px)').matches;
-        const isCollapsed = isMobile ? false : savedState === '1';
+        const savedState = sessionStorage.getItem('site_warning_collapsed_v2');
+        const isMobile = window.matchMedia && window.matchMedia('(max-width: 700px)').matches;
+        const isCollapsed = isMobile ? savedState !== '0' : savedState === '1';
         this.setSiteWarningCollapsed(isCollapsed);
     },
 
@@ -574,13 +616,8 @@ const app = {
     toggleSiteWarning: function () {
         const ticker = document.querySelector('.site-warning-ticker');
         if (!ticker) return;
-        if (window.matchMedia && window.matchMedia('(max-width: 600px)').matches) {
-            sessionStorage.removeItem('site_warning_collapsed');
-            this.setSiteWarningCollapsed(false);
-            return;
-        }
         const isCollapsed = !ticker.classList.contains('is-collapsed');
-        sessionStorage.setItem('site_warning_collapsed', isCollapsed ? '1' : '0');
+        sessionStorage.setItem('site_warning_collapsed_v2', isCollapsed ? '1' : '0');
         this.setSiteWarningCollapsed(isCollapsed);
     },
 
@@ -761,11 +798,51 @@ const app = {
     },
 
     // === Dashboard Sidebar Scroll ===
+    toggleDashboardNav: function (button) {
+        const nav = button?.closest('.dashboard-sidebar');
+        if (!nav) return;
+        const isOpen = nav.classList.toggle('is-open');
+        button.setAttribute('aria-expanded', String(isOpen));
+    },
+
     scrollDashSection: function (sectionId, btnEl) {
-        document.querySelectorAll('.dash-nav-item').forEach(b => b.classList.remove('active'));
-        if (btnEl) btnEl.classList.add('active');
+        const allowedSections = ['section-orders', 'section-otp', 'section-deposits', 'section-settings'];
+        if (!allowedSections.includes(sectionId)) sectionId = 'section-orders';
+        this.dashboardActiveSection = sectionId;
+        this.applyDashboardSectionState(btnEl);
+        const nav = btnEl?.closest('.dashboard-sidebar');
+        if (nav && window.matchMedia('(max-width: 700px)').matches) {
+            nav.classList.remove('is-open');
+            const toggleButton = nav.querySelector('.dashboard-nav-toggle');
+            toggleButton?.setAttribute('aria-expanded', 'false');
+            toggleButton?.focus({ preventScroll: true });
+        }
+        this.updateMobileBottomNav(sectionId === 'section-settings' ? 'account' : 'orders');
         const target = document.getElementById(sectionId);
-        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (target) requestAnimationFrame(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    },
+
+    applyDashboardSectionState: function (preferredButton = null) {
+        const sectionId = this.dashboardActiveSection || 'section-orders';
+        document.querySelectorAll('#view-dashboard .dashboard-account-panel').forEach(section => {
+            const isActive = section.id === sectionId;
+            section.hidden = !isActive;
+            section.classList.toggle('is-active', isActive);
+            section.setAttribute('aria-hidden', String(!isActive));
+        });
+
+        let activeButton = preferredButton;
+        document.querySelectorAll('#view-dashboard .dash-nav-item').forEach(button => {
+            const isActive = button.dataset.dashboardSection === sectionId;
+            button.classList.toggle('active', isActive);
+            button.setAttribute('aria-selected', String(isActive));
+            if (isActive) activeButton = button;
+        });
+
+        const currentLabel = document.getElementById('dashboard-nav-current');
+        if (currentLabel && activeButton) {
+            currentLabel.textContent = activeButton.textContent.replace(/\s+/g, ' ').trim();
+        }
     },
 
     // === Pagination Utility ===
@@ -850,7 +927,14 @@ const app = {
         }
 
         const path = window.location.pathname.replace(/\/$/, ""); // Xóa dấu '/' ở cuối
-        if (path === '/bank' || path === '/deposit') {
+        if (path.startsWith('/product/')) {
+            const rawProductRoute = path.slice('/product/'.length);
+            try { this.pendingProductRouteKey = decodeURIComponent(rawProductRoute); }
+            catch (error) { this.pendingProductRouteKey = rawProductRoute; }
+            this.navigate('product-detail', false);
+            this.renderProductRouteState('loading');
+            this.resolvePendingProductRoute();
+        } else if (path === '/bank' || path === '/deposit') {
             this.navigate('deposit', false);
         } else if (path === '/otp') {
             this.navigate('otp', false);
@@ -1051,11 +1135,21 @@ const app = {
         const target = document.getElementById(`view-${viewId}`);
         if (target) target.classList.add('active');
         document.body.dataset.activeView = viewId;
+        if (viewId !== 'product-detail') {
+            this.pendingProductRouteKey = '';
+            document.title = 'Tài Khoản Xịn - Mua Bán Tài Khoản Tự Động';
+        }
 
-        if (viewId === 'dashboard') this.renderDashboard();
+        if (viewId === 'dashboard') {
+            this.renderDashboard();
+            this.applyDashboardSectionState();
+        }
         if (viewId === 'admin') this.renderAdmin();
         if (viewId === 'otp') this.loadOTPApps();
-        if (viewId === 'checkout' && this.appState.cartItem) this.setupCheckout(this.appState.cartItem);
+        if (viewId === 'checkout' && this.appState.cartItem) {
+            void this.refreshProviderStocks();
+            this.setupCheckout(this.appState.cartItem);
+        }
         if (viewId === 'maintenance') this.renderMaintenancePage();
         if (viewId === 'home') this.applyAccountOnlyUI();
 
@@ -1179,22 +1273,34 @@ const app = {
     },
 
     renderProductCategoryTabs: function () {
-        const container = document.querySelector('.product-category-tabs');
-        if (!container) return;
+        const containers = document.querySelectorAll('.product-category-tabs');
+        if (!containers.length) return;
+
+        const categoryIcons = {
+            all: 'fas fa-layer-group',
+            entertainment: 'fas fa-gamepad',
+            office: 'fas fa-briefcase',
+            design: 'fas fa-pen-ruler',
+            ai: 'fas fa-microchip',
+            other: 'fas fa-shapes'
+        };
 
         const buttons = [
             `<button class="product-category-btn" data-category="all" onclick="app.setProductCategoryFilter('all', this)">
-                Tất cả <span data-category-pill-count="all">0</span>
+                <i class="${categoryIcons.all}"></i><strong>Tất cả</strong><span data-category-pill-count="all">0</span>
             </button>`,
             ...this.getProductCategories().map(category => `
                 <button class="product-category-btn" data-category="${this.escapeHtml(category.id)}"
                     onclick="app.setProductCategoryFilter('${this.escapeHtml(category.id)}', this)">
-                    ${this.escapeHtml(category.name)}
+                    <i class="${categoryIcons[category.id] || categoryIcons.other}"></i>
+                    <strong>${this.escapeHtml(category.name)}</strong>
                     <span data-category-pill-count="${this.escapeHtml(category.id)}">0</span>
                 </button>
             `)
         ];
-        container.innerHTML = buttons.join('');
+        containers.forEach(container => {
+            container.innerHTML = buttons.join('');
+        });
 
         if (this.productCategoryFilter !== 'all'
             && !this.getProductCategories().some(category => category.id === this.productCategoryFilter)) {
@@ -1213,18 +1319,11 @@ const app = {
         return this.filterProductsByCategory(this.filterProductsBySource(products));
     },
 
-    getProductBadges: function (product, inStock) {
-        const badges = [];
-        if (inStock) badges.push({ icon: 'fas fa-bolt', text: 'Giao ngay' });
-        if (this.isAutoProduct(product)) {
-            badges.push({ icon: 'fas fa-robot', text: 'Tự động 24/7' });
-        }
-        if (this.isWarrantyEnabled(product)) {
-            badges.push({ icon: 'fas fa-shield-alt', text: this.getWarrantyText(product) });
-        } else {
-            badges.push({ icon: 'fas fa-shield-alt', text: 'Không bảo hành' });
-        }
-        return badges.slice(0, 3);
+    getProductBadges: function (product) {
+        return [{
+            icon: 'fas fa-shield-alt',
+            text: this.isWarrantyEnabled(product) ? this.getWarrantyText(product) : 'Không bảo hành'
+        }];
     },
 
     createProductCard: function (product, index, keyword = '') {
@@ -1241,18 +1340,13 @@ const app = {
         const safeName = this.escapeHtml(p.name || 'Sản phẩm');
         const safeDuration = this.escapeHtml(p.duration || 'Dùng ngay');
         const firstLogo = p.logoUrls && p.logoUrls.length > 0 ? p.logoUrls[0] : null;
+        const productPath = this.getProductPath(p);
         let finalPrice = Number(p.price || 0);
-        let priceHtml = `<span class="pc-price">${this.formatMoney(finalPrice)}</span>`;
 
         if (discount > 0) {
             finalPrice = Math.round(finalPrice - (finalPrice * discount / 100));
-            priceHtml = `
-                <span class="pc-price">
-                    <span class="pc-price-old">${this.formatMoney(p.price)}</span>
-                    ${this.formatMoney(finalPrice)}
-                    <span class="pc-discount-tag">-${discount}%</span>
-                </span>`;
         }
+        const formattedPrice = this.formatMoney(finalPrice);
 
         const bannerContent = firstLogo
             ? `<img src="${this.escapeHtml(firstLogo)}" alt="${safeName}" loading="lazy" decoding="async">`
@@ -1262,31 +1356,34 @@ const app = {
             ? safeName.replace(new RegExp(`(${this.escapeHtml(keyword).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), '<mark class="psb-highlight">$1</mark>')
             : safeName;
 
-        const badgeHtml = this.getProductBadges(p, inStock).map(badge => `
+        const badgeHtml = this.getProductBadges(p).map(badge => `
             <span class="pc-trust-pill"><i class="${badge.icon}"></i>${this.escapeHtml(badge.text)}</span>
         `).join('');
 
         card.innerHTML = `
-            <div class="pc-banner" style="cursor:${inStock ? 'pointer' : 'default'}">
+            <${inStock ? 'a' : 'div'} class="pc-banner" ${inStock ? `href="${productPath}"` : ''} style="cursor:${inStock ? 'pointer' : 'default'}">
                 ${bannerContent}
                 <span class="pc-stock-badge ${inStock ? 'in-stock' : 'out-stock'}">
                     ${inStock ? `Còn ${Number(p.quantity || 0)}` : 'Hết hàng'}
                 </span>
-            </div>
+            </${inStock ? 'a' : 'div'}>
             <div class="pc-body">
-                <div class="pc-name" title="${safeName}">${highlightedName}</div>
+                <div class="pc-name" title="${safeName}"><span>${highlightedName}</span></div>
                 <div class="pc-duration"><i class="fas fa-clock"></i>${safeDuration}</div>
                 <div class="pc-trust-row">${badgeHtml}</div>
-                ${priceHtml}
-                <button class="pc-btn ${inStock ? 'pc-btn-buy' : 'pc-btn-sold'}" ${!inStock ? 'disabled' : ''}>
-                    ${inStock ? '<i class="fas fa-shopping-bag"></i> Xem &amp; Mua' : 'Hết hàng'}
-                </button>
+                ${inStock
+                    ? `<a class="pc-btn pc-btn-buy" href="${productPath}" aria-label="Xem và mua ${safeName} với giá ${formattedPrice}"><i class="fas fa-shopping-bag"></i><span class="pc-btn-price">${formattedPrice}</span></a>`
+                    : '<button class="pc-btn pc-btn-sold" disabled>Hết hàng</button>'}
             </div>
         `;
 
         if (inStock) {
             const pid = p.id;
-            const openProduct = () => this.showProductModal(pid);
+            const openProduct = (event) => {
+                if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                this.openProductDetail(pid);
+            };
             card.querySelector('.pc-banner').addEventListener('click', openProduct);
             card.querySelector('.pc-btn').addEventListener('click', openProduct);
         }
@@ -1307,7 +1404,6 @@ const app = {
         controls.className = 'product-sort-controls';
         controls.innerHTML = `
             <div class="product-filter-row">
-                <div class="product-category-tabs" aria-label="Lọc theo danh mục"></div>
                 <div class="product-utility-controls">
                     <div class="product-source-segment" aria-label="Lọc theo nguồn giao">
                         <button class="product-source-btn active" data-source="all" onclick="app.setProductSourceFilter('all', this)">Tất cả</button>
@@ -1395,7 +1491,7 @@ const app = {
         this.productSort = 'default';
 
         const input = document.getElementById('product-search-input');
-        const headerInput = document.querySelector('.header-search input');
+        const headerInput = document.querySelector('.desktop-header-search input, .header-search input');
         if (input) input.value = '';
         if (headerInput) headerInput.value = '';
 
@@ -1441,12 +1537,10 @@ const app = {
                     <div class="sk-line sk-title"></div>
                     <div class="sk-line sk-short"></div>
                     <div class="sk-line sk-pills"></div>
-                    <div class="sk-line sk-price"></div>
                     <div class="sk-line sk-btn"></div>
                 </div>
             </div>
         `).join('');
-        this.renderHomePopularProducts();
     },
 
     renderProducts: function () {
@@ -1456,7 +1550,6 @@ const app = {
         this.updateProductCategoryCounts();
         this.syncProductFilterControls();
         this.renderProductList(this.appState.products);
-        this.renderHomePopularProducts();
     },
 
     searchProducts: function (keyword) {
@@ -1513,51 +1606,112 @@ const app = {
         this.renderProducts();
     },
 
-    renderHomePopularProducts: function () {
-        const container = document.getElementById('home-popular-list');
-        if (!container) return;
+    getProductSlug: function (product) {
+        const slug = this.normalizeText(product?.name || 'san-pham')
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .slice(0, 100);
+        return slug || 'san-pham';
+    },
 
-        const products = this.getSortedProducts((this.appState.products || []).filter(p => Number(p.quantity || 0) > 0)).slice(0, 5);
-        if (products.length === 0) {
-            container.innerHTML = Array.from({ length: 5 }).map(() => `
-                <div class="home-popular-item home-popular-skeleton">
-                    <span class="home-popular-logo"></span>
-                    <span class="home-popular-meta">
-                        <span></span>
-                        <small></small>
-                    </span>
-                    <span class="home-popular-price"></span>
-                    <span class="home-popular-action"></span>
-                </div>
-            `).join('');
+    getProductRouteKey: function (product) {
+        return `${this.getProductSlug(product)}--${String(product?.id || '')}`;
+    },
+
+    getProductPath: function (product) {
+        return `/product/${encodeURIComponent(this.getProductRouteKey(product))}`;
+    },
+
+    findProductByRouteKey: function (routeKey) {
+        const key = String(routeKey || '');
+        const separatorIndex = key.lastIndexOf('--');
+        const productId = separatorIndex >= 0 ? key.slice(separatorIndex + 2) : key;
+        return (this.appState.products || []).find(product =>
+            String(product.id) === productId
+            || this.getProductRouteKey(product) === key
+            || this.getProductSlug(product) === key
+        ) || null;
+    },
+
+    renderProductRouteState: function (state) {
+        const host = document.getElementById('product-detail-content');
+        if (!host) return;
+        if (state === 'not-found') {
+            host.innerHTML = `
+                <div class="product-detail-route-state is-error">
+                    <i class="fas fa-box-open"></i>
+                    <strong>Không tìm thấy sản phẩm</strong>
+                    <span>Sản phẩm có thể đã được đổi tên hoặc ngừng bán.</span>
+                    <button type="button" onclick="app.backToProducts()">Xem danh sách sản phẩm</button>
+                </div>`;
+            return;
+        }
+        host.innerHTML = `
+            <div class="product-detail-route-state">
+                <i class="fas fa-spinner fa-spin"></i>
+                <strong>Đang tải sản phẩm...</strong>
+            </div>`;
+    },
+
+    resolvePendingProductRoute: function () {
+        if (!this.pendingProductRouteKey || !this.productsLoaded) return;
+        const product = this.findProductByRouteKey(this.pendingProductRouteKey);
+        if (!product) {
+            this.renderProductRouteState('not-found');
+            return;
+        }
+        this.openProductDetail(product.id, false);
+    },
+
+    openProductDetail: function (productId, pushState = true) {
+        const product = (this.appState.products || []).find(item => String(item.id) === String(productId));
+        if (!product) {
+            this.pendingProductRouteKey = String(productId || '');
+            this.navigate('product-detail', false);
+            this.renderProductRouteState(this.productsLoaded ? 'not-found' : 'loading');
             return;
         }
 
-        const discount = this.appState.events ? (this.appState.events.discountPercent || 0) : 0;
-        container.innerHTML = products.map(p => {
-            const name = this.escapeHtml(p.name || 'Sản phẩm');
-            const duration = this.escapeHtml(p.duration || 'Dùng ngay');
-            const warranty = this.escapeHtml(this.getWarrantyText(p));
-            const rawPrice = Number(p.price || 0);
-            const finalPrice = discount > 0 ? Math.round(rawPrice - (rawPrice * discount / 100)) : rawPrice;
-            const firstLogo = p.logoUrls && p.logoUrls.length > 0 ? p.logoUrls[0] : '';
-            const logo = firstLogo
-                ? `<img src="${this.escapeHtml(firstLogo)}" alt="${name}" loading="lazy" decoding="async">`
-                : `<i class="fas fa-shopping-bag"></i>`;
-            const safeId = String(p.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        this.pendingProductRouteKey = '';
+        this.navigate('product-detail', false);
+        const target = document.getElementById('view-product-detail');
+        if (!target?.classList.contains('active')) return;
 
-            return `
-                <button type="button" class="home-popular-item" onclick="app.showProductModal('${safeId}')">
-                    <span class="home-popular-logo">${logo}</span>
-                    <span class="home-popular-meta">
-                        <strong>${name}</strong>
-                        <small>${duration} · ${warranty}</small>
-                    </span>
-                    <span class="home-popular-price">${this.formatMoney(finalPrice)}</span>
-                    <span class="home-popular-action">Mua ngay</span>
-                </button>
-            `;
-        }).join('');
+        this.showProductModal(product.id);
+        const overlay = this._activeOverlay;
+        const panel = overlay?.querySelector('.product-modal');
+        const host = document.getElementById('product-detail-content');
+        if (!overlay || !panel || !host) {
+            this.closeProductModal();
+            this.renderProductRouteState('not-found');
+            return;
+        }
+
+        panel.classList.add('product-detail-page');
+        panel.setAttribute('role', 'region');
+        panel.removeAttribute('aria-modal');
+        panel.querySelector('#pm-close-btn')?.remove();
+        host.replaceChildren(panel);
+        overlay.remove();
+        this._activeOverlay = null;
+        document.body.classList.remove('pm-modal-open');
+        if (this._modalKeyHandler) {
+            document.removeEventListener('keydown', this._modalKeyHandler);
+            this._modalKeyHandler = null;
+        }
+
+        const category = document.getElementById('product-detail-category');
+        if (category) category.textContent = this.getProductCategoryName(this.getProductCategory(product));
+        document.title = `${product.name || 'Sản phẩm'} | Tài Khoản Xịn`;
+        if (pushState && window.location.protocol !== 'file:') {
+            history.pushState({ view: 'product-detail', productId: product.id }, '', this.getProductPath(product));
+        }
+        window.scrollTo(0, 0);
+    },
+
+    backToProducts: function () {
+        this.navigate('home');
+        requestAnimationFrame(() => document.getElementById('products-section')?.scrollIntoView({ behavior: 'smooth' }));
     },
 
     showProductModal: function (productId) {
@@ -1581,6 +1735,7 @@ const app = {
         const safeDuration = this.escapeHtml(p.duration || 'Dùng ngay');
         const safeDesc = this.escapeHtml(p.desc || '');
         const warrantyText = this.getWarrantyText(p);
+        const categoryLabel = this.escapeHtml(this.getProductCategoryName(this.getProductCategory(p)));
         const sourceLabel = isProvider
             ? 'Nguồn API tự động'
             : (isAuto ? 'Tự động 24/7' : 'Admin cấp thủ công');
@@ -1589,12 +1744,16 @@ const app = {
             : (isAuto ? 'Giao tự động sau thanh toán' : 'Admin xử lý và cấp tài khoản');
 
         const logoHtml = firstLogo
-            ? `<img class="pm-logo" src="${this.escapeHtml(firstLogo)}" alt="${safeName}" loading="lazy" decoding="async">`
-            : `<div class="pm-logo-placeholder"><i class="fas fa-shopping-bag"></i></div>`;
+            ? `<img class="pm-product-image" src="${this.escapeHtml(firstLogo)}" alt="${safeName}" loading="lazy" decoding="async">`
+            : `<div class="pm-product-placeholder"><i class="fas fa-shopping-bag"></i><span>Hình sản phẩm</span></div>`;
 
         const priceDisplay = discount > 0
-            ? `<div><div class="pm-price-label" style="text-decoration:line-through;color:var(--text-muted);font-size:0.8rem">${this.formatMoney(p.price)}</div><div class="pm-price-value">${this.formatMoney(finalPrice)}</div></div>`
-            : `<div><div class="pm-price-label">Giá bán</div><div class="pm-price-value">${this.formatMoney(finalPrice)}</div></div>`;
+            ? `<div class="pm-price-copy">
+                    <span class="pm-price-label">Giá ưu đãi</span>
+                    <strong class="pm-price-value">${this.formatMoney(finalPrice)}</strong>
+                    <span class="pm-price-saving"><del>${this.formatMoney(p.price)}</del><b>-${discount}%</b></span>
+                </div>`
+            : `<div class="pm-price-copy"><span class="pm-price-label">Giá bán</span><strong class="pm-price-value">${this.formatMoney(finalPrice)}</strong></div>`;
 
         const balanceInfo = this.appState.currentUser
             ? `<div class="pm-info-row"><span class="label"><i class="fas fa-wallet"></i> Số dư của bạn</span><span class="value" style="color:${canAfford ? '#10b981' : 'var(--danger)'}">${this.formatMoney(userBalance)}</span></div>`
@@ -1612,43 +1771,67 @@ const app = {
         const overlay = document.createElement('div');
         overlay.className = 'product-modal-overlay';
         overlay.innerHTML = `
-            <div class="product-modal">
-                <button class="pm-close" id="pm-close-btn" title="Đóng"><i class="fas fa-times"></i></button>
-                <div class="pm-header">
-                    ${logoHtml}
-                    <div class="pm-title-block">
-                        <div class="pm-title">${safeName}</div>
-                        <div class="pm-subtitle">
-                            <span><i class="fas fa-clock" style="color:var(--primary)"></i> ${safeDuration}</span>
-                            <span style="color:${inStock ? '#10b981' : 'var(--danger)'}"><i class="fas fa-box"></i> Còn ${Number(p.quantity || 0)}</span>
-                            <span><i class="${isAuto ? 'fas fa-robot' : 'fas fa-user-check'}"></i> ${sourceLabel}</span>
+            <div class="product-modal" role="dialog" aria-modal="true" aria-labelledby="pm-dialog-title">
+                <button class="pm-close" id="pm-close-btn" type="button" title="Đóng" aria-label="Đóng chi tiết sản phẩm"><i class="fas fa-times"></i></button>
+                <div class="pm-layout">
+                    <section class="pm-media" aria-label="Hình ảnh sản phẩm">
+                        <div class="pm-product-stage">
+                            ${logoHtml}
+                            <span class="pm-stock-chip ${inStock ? 'is-in-stock' : 'is-out-stock'}">
+                                <i class="fas fa-box"></i> ${inStock ? `Còn ${Number(p.quantity || 0)}` : 'Hết hàng'}
+                            </span>
                         </div>
-                    </div>
-                </div>
-                <div class="pm-body">
-                    ${safeDesc ? `<div class="pm-desc">${safeDesc}</div>` : ''}
+                        <div class="pm-media-note">
+                            <i class="fas fa-circle-check"></i>
+                            <span>Sản phẩm được giao và lưu tại lịch sử đơn hàng của bạn.</span>
+                        </div>
+                    </section>
+                    <section class="pm-body">
+                        <span class="pm-eyebrow">SẢN PHẨM</span>
+                        <h2 class="pm-title" id="pm-dialog-title">${safeName}</h2>
+                        <div class="pm-meta-list">
+                            <div><span>Tình trạng</span><strong class="pm-stock-state ${inStock ? 'is-in-stock' : 'is-out-stock'}">${inStock ? 'Còn hàng' : 'Hết hàng'}</strong></div>
+                            <div><span>Thể loại</span><strong>${categoryLabel}</strong></div>
+                            <div><span>Hình thức giao</span><strong>${sourceLabel}</strong></div>
+                        </div>
+                        <div class="pm-price-block">${priceDisplay}</div>
+                        <div class="pm-option-section">
+                            <div class="pm-section-heading">Thời hạn sử dụng</div>
+                            <button class="pm-duration-choice is-selected" type="button" aria-pressed="true">
+                                <i class="fas fa-check"></i><span>${safeDuration}</span>
+                            </button>
+                        </div>
+                        ${safeDesc ? `<div class="pm-description-section"><div class="pm-section-heading">Mô tả sản phẩm</div><div class="pm-desc">${safeDesc}</div></div>` : ''}
+                        <div class="pm-purchase-row">
+                            <div class="pm-qty-wrap">
+                                <label for="pm-qty-input">Số lượng</label>
+                                <div class="pm-qty-control">
+                                    <button type="button" id="pm-qty-minus" aria-label="Giảm số lượng" ${!inStock ? 'disabled' : ''}><i class="fas fa-minus"></i></button>
+                                    <input type="number" id="pm-qty-input" class="pm-qty-input" value="1" min="1" max="${p.quantity}" ${!inStock ? 'disabled' : ''}>
+                                    <button type="button" id="pm-qty-plus" aria-label="Tăng số lượng" ${!inStock ? 'disabled' : ''}><i class="fas fa-plus"></i></button>
+                                </div>
+                            </div>
+                            ${balanceInfo}
+                        </div>
                     <div class="pm-checklist">
                         <div class="pm-check"><i class="fas fa-truck-fast"></i><span>${deliveryLabel}</span></div>
                         <div class="pm-check"><i class="fas fa-shield-alt"></i><span>${this.escapeHtml(warrantyText)}</span></div>
                         <div class="pm-check"><i class="fas fa-copy"></i><span>Thông tin nhận được hiển thị trong lịch sử đơn</span></div>
                     </div>
-                    ${balanceInfo}
-                    <div class="pm-price-block">
-                        ${priceDisplay}
-                        <div class="pm-qty-wrap">
-                            <label>Số lượng</label>
-                            <input type="number" id="pm-qty-input" class="pm-qty-input" value="1" min="1" max="${p.quantity}" ${!inStock ? 'disabled' : ''}>
-                        </div>
-                    </div>
                     <div class="pm-footer">
                         <button class="pm-btn-buy" id="pm-btn-buy" ${!inStock ? 'disabled' : ''}>${buyLabel}</button>
-                        ${depositBtn}
+                        <button class="pm-btn-cart" id="pm-btn-cart" type="button" ${!inStock ? 'disabled' : ''}><i class="fas fa-cart-plus"></i> Thêm vào giỏ</button>
                     </div>
+                    ${depositBtn}
+                    </section>
                 </div>
             </div>
         `;
 
+        overlay.dataset.productId = String(p.id);
+        overlay.querySelector('.product-modal').dataset.productId = String(p.id);
         document.body.appendChild(overlay);
+        document.body.classList.add('pm-modal-open');
         this._activeOverlay = overlay;
 
         // Gắn sự kiện SAU KHI đã append vào DOM
@@ -1656,17 +1839,30 @@ const app = {
         overlay.addEventListener('click', (e) => { if (e.target === overlay) this.closeProductModal(); });
 
         const buyBtn = overlay.querySelector('#pm-btn-buy');
-        if (buyBtn && inStock) {
-            buyBtn.addEventListener('click', () => this.buyProductFromModal(p.id));
-        } else if (buyBtn && !this.appState.currentUser) {
-            buyBtn.addEventListener('click', () => { this.closeProductModal(); this.navigate('login'); });
-        }
+        if (buyBtn) buyBtn.addEventListener('click', () => this.buyProductFromModal(p.id));
 
         const depBtn = overlay.querySelector('#pm-btn-deposit');
         if (depBtn) depBtn.addEventListener('click', () => { this.closeProductModal(); this.navigate('deposit'); });
 
+        const cartBtn = overlay.querySelector('#pm-btn-cart');
+        if (cartBtn) cartBtn.addEventListener('click', () => this.addProductToCartFromModal(p.id));
+
+        const qtyInput = overlay.querySelector('#pm-qty-input');
+        const normalizeQuantity = (nextValue) => {
+            const liveProduct = this.appState.products.find(item => String(item.id) === String(p.id));
+            const liveStock = Math.max(0, Math.floor(Number(liveProduct?.quantity) || 0));
+            if (!qtyInput || liveStock < 1) return 0;
+            const normalized = Math.min(liveStock, Math.max(1, Number(nextValue) || 1));
+            qtyInput.value = String(normalized);
+            return normalized;
+        };
+        overlay.querySelector('#pm-qty-minus')?.addEventListener('click', () => normalizeQuantity(Number(qtyInput.value) - 1));
+        overlay.querySelector('#pm-qty-plus')?.addEventListener('click', () => normalizeQuantity(Number(qtyInput.value) + 1));
+        qtyInput?.addEventListener('change', () => normalizeQuantity(qtyInput.value));
+
         this._modalKeyHandler = (e) => { if (e.key === 'Escape') this.closeProductModal(); };
         document.addEventListener('keydown', this._modalKeyHandler);
+        overlay.querySelector('#pm-close-btn')?.focus();
     },
 
     closeProductModal: function () {
@@ -1674,6 +1870,7 @@ const app = {
             this._activeOverlay.remove();
             this._activeOverlay = null;
         }
+        document.body.classList.remove('pm-modal-open');
         if (this._modalKeyHandler) {
             document.removeEventListener('keydown', this._modalKeyHandler);
             this._modalKeyHandler = null;
@@ -1697,9 +1894,42 @@ const app = {
             }
             // Dùng buyQuantity (nhất quán với setupCheckout)
             this.appState.cartItem = { ...p, buyQuantity };
+            this.syncCartCount();
             this.closeProductModal();
             this.navigate('checkout');
         }
+    },
+
+    addProductToCartFromModal: function (productId) {
+        const p = this.appState.products.find(product => product.id === productId);
+        const qtyInput = document.getElementById('pm-qty-input');
+        const buyQuantity = qtyInput ? parseInt(qtyInput.value, 10) || 1 : 1;
+        if (!p || buyQuantity < 1 || buyQuantity > Number(p.quantity || 0)) {
+            this.showToast(`Kho chỉ còn ${Number(p?.quantity || 0)} sản phẩm.`, 'warning');
+            return;
+        }
+        this.appState.cartItem = { ...p, buyQuantity };
+        this.syncCartCount();
+        this.closeProductModal();
+        this.showToast('Đã thêm sản phẩm vào giỏ hàng.', 'success');
+    },
+
+    syncCartCount: function () {
+        const count = document.getElementById('header-cart-count');
+        if (!count) return;
+        const quantity = this.appState.cartItem ? Number(this.appState.cartItem.buyQuantity || 1) : 0;
+        count.textContent = String(quantity);
+        count.classList.toggle('has-items', quantity > 0);
+    },
+
+    openCart: function () {
+        if (this.appState.cartItem) {
+            this.navigate('checkout');
+            return;
+        }
+        this.navigate('home');
+        document.getElementById('products-section')?.scrollIntoView({ behavior: 'smooth' });
+        this.showToast('Giỏ hàng đang trống.', 'warning');
     },
 
 
@@ -1721,7 +1951,10 @@ const app = {
                 tempProducts.sort((a, b) => a.name.localeCompare(b.name));
 
                 this.appState.products = tempProducts;
+                this.productsLoaded = true;
+                this.reconcileLiveProductState();
                 this.renderProducts();
+                this.resolvePendingProductRoute();
 
                 // Cập nhật typing effect theo tên sản phẩm từ Firebase
                 HeroFX.updateTypingWords(tempProducts.map(p => p.name));
@@ -1731,9 +1964,140 @@ const app = {
                 }
             } else {
                 this.appState.products = [];
+                this.productsLoaded = true;
+                this.reconcileLiveProductState();
                 this.renderProducts();
+                this.resolvePendingProductRoute();
             }
         });
+    },
+
+    reconcileLiveProductState: function () {
+        const products = this.appState.products || [];
+        const productSurface = this._activeOverlay?.querySelector('.product-modal[data-product-id]')
+            || document.querySelector('#view-product-detail.active .product-detail-page[data-product-id]');
+
+        if (productSurface) {
+            const productId = String(productSurface.dataset.productId || '');
+            const product = products.find(item => String(item.id) === productId);
+            const stock = Math.max(0, Math.floor(Number(product?.quantity) || 0));
+            const inStock = Boolean(product) && stock > 0;
+            const stockChip = productSurface.querySelector('.pm-stock-chip');
+            const stockState = productSurface.querySelector('.pm-stock-state');
+            const quantityInput = productSurface.querySelector('#pm-qty-input');
+            const buyButton = productSurface.querySelector('#pm-btn-buy');
+            const cartButton = productSurface.querySelector('#pm-btn-cart');
+
+            if (stockChip) {
+                stockChip.classList.toggle('is-in-stock', inStock);
+                stockChip.classList.toggle('is-out-stock', !inStock);
+                stockChip.innerHTML = `<i class="fas fa-box"></i> ${inStock ? `Còn ${stock}` : 'Hết hàng'}`;
+            }
+            if (stockState) {
+                stockState.classList.toggle('is-in-stock', inStock);
+                stockState.classList.toggle('is-out-stock', !inStock);
+                stockState.textContent = inStock ? 'Còn hàng' : 'Hết hàng';
+            }
+            if (quantityInput) {
+                quantityInput.max = String(stock);
+                quantityInput.disabled = !inStock;
+                quantityInput.value = inStock
+                    ? String(Math.min(stock, Math.max(1, Number(quantityInput.value) || 1)))
+                    : '1';
+            }
+            productSurface.querySelectorAll('#pm-qty-minus, #pm-qty-plus').forEach(button => {
+                button.disabled = !inStock;
+            });
+            if (buyButton) {
+                buyButton.disabled = !inStock;
+                buyButton.innerHTML = !inStock
+                    ? 'Hết hàng'
+                    : (this.appState.currentUser
+                        ? '<i class="fas fa-bolt"></i> Mua ngay'
+                        : '<i class="fas fa-sign-in-alt"></i> Đăng nhập để mua');
+            }
+            if (cartButton) cartButton.disabled = !inStock;
+        }
+
+        const cartItem = this.appState.cartItem;
+        if (!cartItem) return;
+        const liveProduct = products.find(item => String(item.id) === String(cartItem.id));
+        const buyQuantity = Math.max(1, Math.floor(Number(cartItem.buyQuantity) || 1));
+        const liveStock = Math.max(0, Math.floor(Number(liveProduct?.quantity) || 0));
+        const nextBuyQuantity = liveStock > 0 ? Math.min(buyQuantity, liveStock) : buyQuantity;
+        const quantityWasReduced = nextBuyQuantity < buyQuantity;
+        this.appState.cartItem = liveProduct
+            ? { ...cartItem, ...liveProduct, buyQuantity: nextBuyQuantity }
+            : { ...cartItem, quantity: 0, buyQuantity };
+        this.syncCartCount();
+
+        if (document.getElementById('view-checkout')?.classList.contains('active')) {
+            this.setupCheckout(this.appState.cartItem);
+            if (quantityWasReduced) {
+                this.showToast(`Kho vừa thay đổi, số lượng mua được điều chỉnh còn ${nextBuyQuantity}.`, 'warning');
+            }
+        }
+    },
+
+    startProviderStockSync: function () {
+        if (this.providerStockSyncTimer || !['http:', 'https:'].includes(window.location.protocol)) return;
+
+        const refreshWhenVisible = () => {
+            if (!document.hidden && navigator.onLine !== false) void this.refreshProviderStocks();
+        };
+        refreshWhenVisible();
+        this.providerStockSyncTimer = setInterval(refreshWhenVisible, this.PROVIDER_STOCK_SYNC_INTERVAL_MS);
+        document.addEventListener('visibilitychange', refreshWhenVisible);
+        window.addEventListener('focus', refreshWhenVisible);
+        window.addEventListener('online', refreshWhenVisible);
+    },
+
+    refreshProviderStocks: async function () {
+        if (this.providerStockSyncRequest) {
+            this.providerStockSyncQueued = true;
+            return this.providerStockSyncRequest;
+        }
+
+        this.providerStockSyncRequest = (async () => {
+            const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            const timeoutId = controller
+                ? setTimeout(() => controller.abort(), this.PROVIDER_STOCK_REQUEST_TIMEOUT_MS)
+                : null;
+            try {
+                const response = await fetch('/api/provider/stock-sync', {
+                    method: 'POST',
+                    headers: { Accept: 'application/json' },
+                    cache: 'no-store',
+                    ...(controller ? { signal: controller.signal } : {})
+                });
+                const contentType = response.headers.get('content-type') || '';
+                if (!contentType.includes('application/json')) throw new Error('Backend đồng bộ tồn kho chưa sẵn sàng.');
+                const payload = await response.json();
+                if (!response.ok || payload?.success === false) {
+                    const error = new Error(payload?.error || 'Không thể đồng bộ tồn kho API.');
+                    error.code = payload?.code || '';
+                    throw error;
+                }
+                return payload.data || {};
+            } finally {
+                if (timeoutId) clearTimeout(timeoutId);
+            }
+        })();
+
+        try {
+            return await this.providerStockSyncRequest;
+        } catch (error) {
+            console.warn('Không thể đồng bộ tồn kho API:', error.message);
+            return null;
+        } finally {
+            this.providerStockSyncRequest = null;
+            if (this.providerStockSyncQueued) {
+                this.providerStockSyncQueued = false;
+                if (!document.hidden && navigator.onLine !== false) {
+                    setTimeout(() => void this.refreshProviderStocks(), 0);
+                }
+            }
+        }
     },
 
     listenToProductCategories: function () {
@@ -2453,10 +2817,6 @@ const app = {
             }
             this.appState.banners = tempBanners;
             this.renderBanners();
-
-            if (document.getElementById('view-admin') && document.getElementById('view-admin').classList.contains('active')) {
-                this.renderAdminBanners();
-            }
         });
     },
 
@@ -2513,8 +2873,11 @@ const app = {
     // Shopping & Checkout Flow
     setupCheckout: function (product) {
         const discount = this.appState.events ? (this.appState.events.discountPercent || 0) : 0;
+        const requestedQuantity = Math.max(1, Math.floor(Number(product.buyQuantity) || 1));
+        const availableStock = Math.max(0, Math.floor(Number(product.quantity) || 0));
+        const hasStock = availableStock >= requestedQuantity;
         const unitPrice = discount > 0 ? Math.round(product.price - (product.price * discount / 100)) : product.price;
-        const totalAmount = unitPrice * (product.buyQuantity || 1);
+        const totalAmount = unitPrice * requestedQuantity;
 
         const detailsContainer = document.getElementById('checkout-product-details');
         detailsContainer.innerHTML = `
@@ -2528,7 +2891,8 @@ const app = {
             </div>
         `;
 
-        const orderId = 'ACC' + Math.floor(Date.now() / 1000).toString().slice(-5) + Math.floor(Math.random() * 90 + 10);
+        const orderId = product.tempOrderId
+            || ('ACC' + Math.floor(Date.now() / 1000).toString().slice(-5) + Math.floor(Math.random() * 90 + 10));
         document.getElementById('checkout-price').innerText = this.formatMoney(totalAmount);
 
         const currentBal = this.appState.currentUser ? (this.appState.currentUser.balance || 0) : 0;
@@ -2537,9 +2901,14 @@ const app = {
         const btnPay = document.getElementById('btn-pay-balance');
         const warning = document.getElementById('checkout-warning');
 
-        if (currentBal < totalAmount) {
+        if (!hasStock) {
             btnPay.disabled = true;
             warning.style.display = 'block';
+            warning.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Kho hiện chỉ còn ${availableStock} sản phẩm. Vui lòng chọn lại sản phẩm.`;
+        } else if (currentBal < totalAmount) {
+            btnPay.disabled = true;
+            warning.style.display = 'block';
+            warning.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Số dư không đủ! Bạn cần nạp thêm tiền.';
         } else {
             btnPay.disabled = false;
             warning.style.display = 'none';
@@ -2786,6 +3155,7 @@ const app = {
                     date: new Date().toLocaleString('vi-VN')
                 });
                 this.appState.cartItem = null;
+                this.syncCartCount();
                 this.navigate('dashboard');
             } catch (error) {
                 this.showToast(error.message, 'error');
@@ -2883,6 +3253,7 @@ const app = {
                 });
             }
             this.appState.cartItem = null;
+            this.syncCartCount();
             loading.classList.add('hidden');
             this.navigate('dashboard');
         } catch (error) {
@@ -3121,15 +3492,15 @@ const app = {
                         : `<button class="order-account-action" onclick="app.openAccountDeliveryModal(decodeURIComponent('${safeOrderId}'))"><i class="fas fa-route"></i> Theo dõi đơn</button>`;
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td style="color:var(--text-muted);font-weight:600;">${idx}</td>
-                        <td class="font-bold">#${o.id}</td>
-                        <td>${this.escapeHtml(o.productName || '-')}</td>
-                        <td><span class="order-duration"><i class="fas fa-clock"></i> ${this.escapeHtml(this.getOrderDurationText(o))}</span></td>
-                        <td><span class="order-price">${this.formatMoney(o.price || 0)}</span></td>
-                        <td>${o.purchasedAtDisplay || o.date || (o.timestamp ? new Date(o.timestamp).toLocaleString('vi-VN') : '-')}</td>
-                        <td>${o.warranty || 'Không bảo hành'}</td>
-                        <td><span class="status-badge ${statusClass}"><i class="${statusIcon}"></i> ${o.status}</span>${this.renderOrderTimeline(o, true)}</td>
-                        <td>${accountAction}</td>
+                        <td data-label="STT" style="color:var(--text-muted);font-weight:600;">${idx}</td>
+                        <td data-label="Mã đơn" class="font-bold">#${o.id}</td>
+                        <td data-label="Sản phẩm">${this.escapeHtml(o.productName || '-')}</td>
+                        <td data-label="Thời hạn"><span class="order-duration"><i class="fas fa-clock"></i> ${this.escapeHtml(this.getOrderDurationText(o))}</span></td>
+                        <td data-label="Số tiền"><span class="order-price">${this.formatMoney(o.price || 0)}</span></td>
+                        <td data-label="Ngày mua">${o.purchasedAtDisplay || o.date || (o.timestamp ? new Date(o.timestamp).toLocaleString('vi-VN') : '-')}</td>
+                        <td data-label="Bảo hành">${o.warranty || 'Không bảo hành'}</td>
+                        <td data-label="Trạng thái"><span class="status-badge ${statusClass}"><i class="${statusIcon}"></i> ${o.status}</span>${this.renderOrderTimeline(o, true)}</td>
+                        <td data-label="Tài khoản">${accountAction}</td>
                     `;
                     return tr;
                 }, 'pagbar-orders');
@@ -3167,14 +3538,14 @@ const app = {
                     }
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td style="color:var(--text-muted);font-weight:600;">${idx}</td>
-                        <td>${h.date}</td>
-                        <td class="font-bold">${h.appName}</td>
-                        <td><span class="${phoneClass}"${phoneStyle}>${dispPhone || '-'}</span></td>
-                        <td>${this.formatMoney(h.price)}</td>
-                        <td><span class="status-badge ${statusClass}">${h.status}</span></td>
-                        <td><span class="font-bold" style="color:${isSuccess ? '#00ff00' : 'var(--text-muted)'}">${h.code || '-'}</span></td>
-                        <td>${rebuyBtn}</td>
+                        <td data-label="STT" style="color:var(--text-muted);font-weight:600;">${idx}</td>
+                        <td data-label="Ngày thuê">${h.date}</td>
+                        <td data-label="Dịch vụ" class="font-bold">${h.appName}</td>
+                        <td data-label="Số điện thoại"><span class="${phoneClass}"${phoneStyle}>${dispPhone || '-'}</span></td>
+                        <td data-label="Giá">${this.formatMoney(h.price)}</td>
+                        <td data-label="Trạng thái"><span class="status-badge ${statusClass}">${h.status}</span></td>
+                        <td data-label="Mã OTP"><span class="font-bold" style="color:${isSuccess ? '#00ff00' : 'var(--text-muted)'}">${h.code || '-'}</span></td>
+                        <td data-label="Hành động">${rebuyBtn}</td>
                     `;
                     return tr;
                 }, 'pagbar-otp');
@@ -3209,12 +3580,12 @@ const app = {
                         : '<span style="color:var(--text-muted);">-</span>';
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td style="color:var(--text-muted);font-weight:600;">${idx}</td>
-                        <td>${d.date || '-'}</td>
-                        <td class="font-bold text-gradient">${memo}</td>
-                        <td>${this.formatMoney(d.amount)}</td>
-                        <td><span class="status-badge ${statusClass}"><i class="${statusIcon}"></i> ${this.escapeHtml(d.status)}</span>${expireInfo}</td>
-                        <td>${cancelAction}</td>
+                        <td data-label="STT" style="color:var(--text-muted);font-weight:600;">${idx}</td>
+                        <td data-label="Thời gian">${d.date || '-'}</td>
+                        <td data-label="Mã giao dịch" class="font-bold text-gradient">${memo}</td>
+                        <td data-label="Số tiền">${this.formatMoney(d.amount)}</td>
+                        <td data-label="Trạng thái"><span class="status-badge ${statusClass}"><i class="${statusIcon}"></i> ${this.escapeHtml(d.status)}</span>${expireInfo}</td>
+                        <td data-label="Hành động">${cancelAction}</td>
                     `;
                     return tr;
                 }, 'pagbar-deposits');
@@ -3567,17 +3938,17 @@ const app = {
         const setup = document.getElementById('provider-vault-setup');
         const auth = document.getElementById('provider-vault-auth');
         const manager = document.getElementById('provider-vault-manager');
-        if (!status || !setup || !auth || !manager) return;
+        if (!status || !setup || !manager) return;
 
         setup.classList.toggle('hidden', mode !== 'setup');
-        auth.classList.toggle('hidden', mode !== 'locked');
+        auth?.classList.add('hidden');
         manager.classList.toggle('hidden', mode !== 'unlocked');
         status.className = `provider-vault-status is-${mode}`;
         const defaults = {
-            loading: 'Đang kiểm tra két khóa…',
+            loading: 'Đang kiểm tra kết nối…',
             setup: 'Chưa có khóa mã hóa',
-            locked: 'Két đang khóa',
-            unlocked: 'Két đã mở an toàn',
+            locked: 'Cần đăng nhập lại',
+            unlocked: 'Sẵn sàng sử dụng',
             unavailable: 'Chưa kết nối backend'
         };
         status.textContent = message || defaults[mode] || defaults.unavailable;
@@ -3619,7 +3990,9 @@ const app = {
 
     providerAdminRequest: async function (path, options = {}) {
         const headers = { Accept: 'application/json', ...(options.headers || {}) };
-        const token = this.getProviderAdminToken();
+        const vaultToken = this.getProviderAdminToken();
+        const userToken = this.getUserSessionToken();
+        const token = vaultToken || userToken;
         if (token) headers.Authorization = `Bearer ${token}`;
         if (options.body !== undefined) headers['Content-Type'] = 'application/json';
 
@@ -3644,8 +4017,12 @@ const app = {
         const payload = await response.json();
         if (!response.ok || payload?.success === false) {
             if (response.status === 401) {
-                sessionStorage.removeItem('accstore_provider_admin_token');
-                this.setProviderVaultMode('locked', 'Phiên đã hết hạn — vui lòng xác minh lại');
+                if (vaultToken && userToken && !options.userSessionFallback) {
+                    sessionStorage.removeItem('accstore_provider_admin_token');
+                    return this.providerAdminRequest(path, { ...options, userSessionFallback: true });
+                }
+                if (vaultToken) sessionStorage.removeItem('accstore_provider_admin_token');
+                if (!vaultToken && userToken) sessionStorage.removeItem('accstore_user_session_token');
             }
             const error = new Error(payload?.error || 'Không thể xử lý yêu cầu.');
             error.code = payload?.code || '';
@@ -3664,17 +4041,13 @@ const app = {
             this.appState.providerSources = this.providerAdminState.providers;
             this.setProviderVaultMode('unlocked', 'DEMO HTML — không lưu dữ liệu');
             const sessionLabel = document.getElementById('provider-session-label');
-            const lockButton = document.getElementById('provider-lock-button');
             if (sessionLabel) sessionLabel.innerHTML = '<i class="fas fa-flask"></i> Chế độ demo cục bộ — không gọi API thật, không lưu key hoặc Firebase';
-            lockButton?.classList.add('hidden');
             this.renderProviderSources();
             return;
         }
 
         const sessionLabel = document.getElementById('provider-session-label');
-        const lockButton = document.getElementById('provider-lock-button');
-        if (sessionLabel) sessionLabel.innerHTML = '<i class="fas fa-circle-check"></i> Phiên quản lý đang được bảo vệ';
-        lockButton?.classList.remove('hidden');
+        if (sessionLabel) sessionLabel.innerHTML = '<i class="fas fa-circle-check"></i> Đã xác thực bằng phiên đăng nhập quản trị';
         this.setProviderVaultMode('loading');
         try {
             const status = await this.providerAdminRequest('/status');
@@ -3684,20 +4057,13 @@ const app = {
                 this.renderProviderSources();
                 return;
             }
-            if (!this.getProviderAdminToken()) {
-                this.setProviderVaultMode('locked');
-                this.renderProviderSources();
-                return;
-            }
-
-            this.setProviderVaultMode('unlocked');
             const data = await this.providerAdminRequest('/providers');
             this.providerAdminState.providers = Array.isArray(data.providers) ? data.providers : [];
             this.appState.providerSources = this.providerAdminState.providers;
+            this.setProviderVaultMode('unlocked');
             this.renderProviderSources();
         } catch (error) {
             if (error.code === 'VAULT_NOT_CONFIGURED') this.setProviderVaultMode('setup');
-            else if (!this.getProviderAdminToken() && this.providerAdminState.configured) this.setProviderVaultMode('locked', error.message);
             else this.setProviderVaultMode('unavailable', error.message);
             this.renderProviderSources(error.message);
         }
@@ -3943,7 +4309,7 @@ const app = {
             <option value="${this.escapeHtml(provider.id)}">${this.escapeHtml(provider.label)} — ${this.escapeHtml(provider.providerName)}</option>
         `);
         if (saved.providerId && !providers.some(item => item.id === saved.providerId)) {
-            options.unshift(`<option value="${this.escapeHtml(saved.providerId)}">${this.escapeHtml(saved.providerLabel || 'Nguồn API đã liên kết')} — cần mở lại Két API</option>`);
+            options.unshift(`<option value="${this.escapeHtml(saved.providerId)}">${this.escapeHtml(saved.providerLabel || 'Nguồn API đã liên kết')}</option>`);
         }
         select.innerHTML = options.length > 0
             ? options.join('')
@@ -3966,7 +4332,7 @@ const app = {
                     this.providerAdminState.providers = this.getProviderDemoSources();
                     this.providerAdminState.demoInitialized = true;
                 }
-            } else if ((force || this.providerAdminState.providers.length === 0) && this.getProviderAdminToken()) {
+            } else if (force || this.providerAdminState.providers.length === 0) {
                 const data = await this.providerAdminRequest('/providers');
                 this.providerAdminState.providers = Array.isArray(data.providers) ? data.providers : [];
                 this.appState.providerSources = this.providerAdminState.providers;
@@ -3975,9 +4341,7 @@ const app = {
             const providerId = this.populateProductProviderSources(saved.providerId || picker.providerId);
             if (!providerId) {
                 this.setProductProviderStatus(
-                    this.getProviderAdminToken()
-                        ? '<i class="fas fa-circle-exclamation"></i> Chưa có nguồn API. Hãy thêm key tại tab <strong>Nguồn API</strong> trước.'
-                        : '<i class="fas fa-lock"></i> Hãy mở Két API tại tab <strong>Nguồn API</strong>, sau đó quay lại chọn sản phẩm.',
+                    '<i class="fas fa-circle-exclamation"></i> Chưa có nguồn API. Hãy thêm key tại tab <strong>Nguồn API</strong> trước.',
                     'error'
                 );
                 return;
@@ -4023,7 +4387,6 @@ const app = {
                 const provider = this.providerAdminState.providers.find(item => item.id === providerId);
                 products = this.getProviderDemoProducts(provider?.type);
             } else {
-                if (!this.getProviderAdminToken()) throw new Error('Két API đang khóa. Hãy mở két tại tab Nguồn API.');
                 const data = await this.providerAdminRequest(`/providers/${encodeURIComponent(providerId)}/products`);
                 products = Array.isArray(data.products) ? data.products : [];
                 this.providerAdminState.productsByProvider[providerId] = {
@@ -4299,74 +4662,6 @@ const app = {
             const mins = Math.round(ageMs / 60000);
             if (detailEl) detailEl.textContent = 'Không thấy heartbeat ~' + mins + ' phút. Bot có thể đã tắt hoặc đang redeploy.';
         }
-    },
-
-    adminAddBanner: function (e) {
-        e.preventDefault();
-        if (!db) return;
-
-        const imgUrl = document.getElementById('admin-banner-img').value.trim();
-        const link = document.getElementById('admin-banner-link').value.trim();
-
-        if (!imgUrl) {
-            this.showToast("Vui lòng nhập Link Hình ảnh!", 'warning');
-            return;
-        }
-
-        const newBanner = {
-            imgUrl: imgUrl,
-            link: link,
-            timestamp: Date.now()
-        };
-
-        db.ref('settings/banners').push(newBanner).then(() => {
-            this.showToast("Đã thêm banner quảng cáo!");
-            e.target.reset();
-        }).catch(err => {
-            this.showToast("Lỗi: " + err.message);
-        });
-    },
-
-    adminDeleteBanner: function (id) {
-        if (!db) return;
-        if (!confirm("Bạn có chắc muốn xóa banner này?")) return;
-
-        db.ref('settings/banners/' + id).remove().then(() => {
-            this.showToast("Đã xóa banner!");
-        });
-    },
-
-    renderAdminBanners: function () {
-        const list = document.getElementById('admin-banners-list');
-        if (!list) return;
-
-        list.innerHTML = '';
-        if (this.appState.banners.length === 0) {
-            list.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem;">Chưa có banner nào.</p>';
-            return;
-        }
-
-        this.appState.banners.forEach(b => {
-            const div = document.createElement('div');
-            div.style.display = 'flex';
-            div.style.alignItems = 'center';
-            div.style.justifyContent = 'space-between';
-            div.style.background = 'rgba(0,0,0,0.3)';
-            div.style.padding = '10px';
-            div.style.borderRadius = '8px';
-            div.style.border = '1px solid var(--card-border)';
-
-            div.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    <img src="${b.imgUrl}" alt="Banner" style="width: 80px; height: 40px; object-fit: cover; border-radius: 5px;">
-                    <div style="font-size: 0.85rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                        <strong>Link đích:</strong> <a href="${b.link || '#'}" target="_blank" style="color: var(--accent);">${b.link || 'Không có'}</a>
-                    </div>
-                </div>
-                <button class="btn-outline" style="padding: 5px 10px; border-color: var(--danger); color: var(--danger);" onclick="app.adminDeleteBanner('${b.id}')"><i class="fas fa-trash"></i></button>
-            `;
-            list.appendChild(div);
-        });
     },
 
     adminRejectDeposit: function (memo) {
@@ -8101,19 +8396,7 @@ const HeroFX = {
     },
 
     init() {
-        this.initCanvas();
         this.initTyping();
-        // Pause canvas when tab is hidden (performance)
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                cancelAnimationFrame(this.animFrame);
-            } else {
-                this.loop();
-            }
-        });
-
-        // Resize handler
-        window.addEventListener('resize', () => this.resizeCanvas());
     },
 
     // ---- PARTICLE CANVAS ----
@@ -8215,44 +8498,25 @@ const HeroFX = {
     restartTyping() {
         clearTimeout(this.typingTimer);
         this.wordIndex = 0;
-        this.charIndex = 0;
+        this.charIndex = this.TYPING_WORDS[0].length;
         this.isErasing = false;
         this.typingEl.setAttribute('aria-label', this.TYPING_WORDS[0]);
-        const useStableMobileTitle = this.typingMediaQuery
-            ? this.typingMediaQuery.matches
-            : window.matchMedia('(max-width: 600px)').matches;
-        this.typingEl.classList.toggle('is-static-title', useStableMobileTitle);
-
-        if (useStableMobileTitle || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            this.renderTypingText(this.TYPING_WORDS[0], false);
-            return;
-        }
-
-        this.renderTypingText('', false);
-        this.typingTimer = setTimeout(() => this.typeStep(), 420);
+        this.typingEl.classList.add('is-static-title');
+        this.renderTypingText(this.TYPING_WORDS[0], false);
     },
 
     renderTypingText(text, animateLast) {
         if (!this.typingEl) return;
         const word = this.TYPING_WORDS[this.wordIndex % this.TYPING_WORDS.length];
-        const secondLineStart = word.indexOf('&');
+        const accentStart = word.indexOf('&');
         const otpStart = word.lastIndexOf('OTP');
         const fragment = document.createDocumentFragment();
 
         Array.from(text).forEach((character, index) => {
-            if (secondLineStart > 0 && index === secondLineStart - 1 && character === ' ') return;
-
-            if (secondLineStart >= 0 && index === secondLineStart) {
-                const lineBreak = document.createElement('span');
-                lineBreak.className = 'hero-type-break';
-                lineBreak.setAttribute('aria-hidden', 'true');
-                fragment.appendChild(lineBreak);
-            }
-
             const letter = document.createElement('span');
             letter.className = 'hero-type-char';
             if (character === '&') letter.classList.add('is-ampersand');
-            if (secondLineStart >= 0 && index > secondLineStart) letter.classList.add('is-second-line');
+            if (accentStart >= 0 && index > accentStart) letter.classList.add('is-second-line');
             if (otpStart >= 0 && index >= otpStart) letter.classList.add('is-otp');
             if (animateLast && index === text.length - 1) letter.classList.add('is-entering');
             letter.setAttribute('aria-hidden', 'true');

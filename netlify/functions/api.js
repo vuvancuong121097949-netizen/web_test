@@ -19,8 +19,11 @@ const PRICE_MUL = 3000;
 // Bắt buộc cấu hình PROVIDER_MASTER_KEY (ít nhất 32 ký tự) trên Netlify trước khi sử dụng.
 const PROVIDER_MASTER_KEY = String(process.env.PROVIDER_MASTER_KEY || '');
 const PROVIDER_VAULT_PATH = 'secure/providerSources';
+const PROVIDER_STOCK_SYNC_LEASE_PATH = 'secure/providerStockSyncLease';
 const PROVIDER_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const USER_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+const PROVIDER_STOCK_SYNC_MIN_INTERVAL_MS = 4 * 1000;
+const PROVIDER_STOCK_SYNC_LEASE_MS = 10 * 1000;
 const PROVIDER_TYPES = Object.freeze({
     nnmshop: {
         name: 'NNM Shop',
@@ -53,6 +56,7 @@ const PROVIDER_TYPES = Object.freeze({
 });
 const adminLoginAttempts = new Map();
 const userLoginAttempts = new Map();
+let providerStockSyncPromise = null;
 
 const DEFAULT_ALLOWED_APPS = [
     1095, 1561, 1869, 1195, 1001, 1160, 1005, 1021, 1432, 1247,
@@ -525,7 +529,22 @@ function getAdminToken(event) {
 }
 
 async function requireAdminSession(event) {
-    const payload = verifyAdminSessionToken(getAdminToken(event));
+    const token = getAdminToken(event);
+    let payload;
+    try {
+        payload = verifyAdminSessionToken(token);
+    } catch (adminSessionError) {
+        try {
+            const userPayload = verifyUserSessionToken(token);
+            if (String(userPayload.username || '').trim().toLowerCase() !== 'admin') {
+                throw { status: 403, code: 'ADMIN_PERMISSION_REQUIRED', error: 'Tài khoản không có quyền quản trị.' };
+            }
+            payload = userPayload;
+        } catch (userSessionError) {
+            if (userSessionError?.code === 'ADMIN_PERMISSION_REQUIRED') throw userSessionError;
+            throw { status: 401, code: 'ADMIN_AUTH_REQUIRED', error: 'Phiên quản trị đã hết hạn. Vui lòng đăng xuất rồi đăng nhập lại.' };
+        }
+    }
     const adminUser = await fbSecureGet('users/admin');
     if (!adminUser || typeof adminUser !== 'object'
         || Number(adminUser.sessionVersion || 0) !== Number(payload.sv || 0)) {
@@ -543,6 +562,14 @@ function assertAdminSameOrigin(event) {
     } catch (e) {
         throw { status: 403, code: 'INVALID_ORIGIN', error: 'Yêu cầu quản trị không cùng nguồn với website.' };
     }
+}
+
+function assertBrowserSameOrigin(event) {
+    const origin = String(event.headers.origin || event.headers.Origin || '').trim();
+    if (!origin) {
+        throw { status: 403, code: 'INVALID_ORIGIN', error: 'Yêu cầu đồng bộ phải được gửi từ website.' };
+    }
+    assertAdminSameOrigin(event);
 }
 
 function getAdminClientKey(event) {
@@ -637,8 +664,17 @@ function providerRequest(providerType, endpoint, apiKey, options = {}) {
     const config = getProviderConfig(providerType);
     const target = new URL(endpoint, config.baseUrl);
     const method = String(options.method || 'GET').toUpperCase();
+    const timeoutMs = Math.max(1000, Number(options.timeoutMs) || (method === 'GET' ? 12000 : 30000));
     const requestBody = options.body === undefined ? '' : JSON.stringify(options.body);
     return new Promise((resolve, reject) => {
+        let settled = false;
+        let hardTimeout = null;
+        const finish = (callback, value) => {
+            if (settled) return;
+            settled = true;
+            if (hardTimeout) clearTimeout(hardTimeout);
+            callback(value);
+        };
         const request = https.request({
             hostname: target.hostname,
             port: 443,
@@ -665,24 +701,25 @@ function providerRequest(providerType, endpoint, apiKey, options = {}) {
                 let payload = null;
                 try { payload = responseBody ? JSON.parse(responseBody) : {}; }
                 catch (e) {
-                    return reject({ status: 502, code: 'PROVIDER_INVALID_RESPONSE', error: 'Nhà cung cấp trả dữ liệu không hợp lệ.' });
+                    return finish(reject, { status: 502, code: 'PROVIDER_INVALID_RESPONSE', error: 'Nhà cung cấp trả dữ liệu không hợp lệ.' });
                 }
                 const providerMessage = String(payload?.detail || payload?.message || payload?.error || payload?.msg || '')
                     .replaceAll(String(apiKey), '***')
                     .slice(0, 240);
                 if (response.statusCode < 200 || response.statusCode >= 300 || payload?.success === false) {
-                    return reject({
+                    return finish(reject, {
                         status: response.statusCode >= 400 && response.statusCode < 500 ? response.statusCode : 502,
                         code: 'PROVIDER_REJECTED',
                         error: providerMessage || `Nhà cung cấp từ chối kết nối (HTTP ${response.statusCode}).`,
                         providerResponded: true
                     });
                 }
-                resolve(payload);
+                finish(resolve, payload);
             });
         });
-        request.setTimeout(method === 'GET' ? 12000 : 30000, () => request.destroy(new Error('Nhà cung cấp phản hồi quá chậm.')));
-        request.on('error', error => reject({
+        request.setTimeout(timeoutMs, () => request.destroy(new Error('Nhà cung cấp phản hồi quá chậm.')));
+        hardTimeout = setTimeout(() => request.destroy(new Error('Nhà cung cấp vượt quá thời gian chờ.')), timeoutMs);
+        request.on('error', error => finish(reject, {
             status: 502,
             code: 'PROVIDER_UNAVAILABLE',
             error: String(error.message || 'Không thể kết nối nhà cung cấp.').slice(0, 240),
@@ -714,15 +751,31 @@ async function testProviderCredential(providerType, apiKey) {
     };
 }
 
+function getProviderProductArray(payload) {
+    const candidates = [
+        payload,
+        payload?.data,
+        payload?.products,
+        payload?.items,
+        payload?.data?.products,
+        payload?.data?.items,
+        payload?.result,
+        payload?.result?.products,
+        payload?.data?.result?.products
+    ];
+    const products = candidates.find(Array.isArray);
+    if (!products) {
+        throw {
+            status: 502,
+            code: 'PROVIDER_INVALID_CATALOG',
+            error: 'Nhà cung cấp trả danh mục sản phẩm không đúng cấu trúc.'
+        };
+    }
+    return products;
+}
+
 function normalizeProviderProducts(providerType, payload) {
-    const raw = Array.isArray(payload)
-        ? payload
-        : (Array.isArray(payload?.data)
-            ? payload.data
-            : (Array.isArray(payload?.data?.products)
-                ? payload.data.products
-                : (Array.isArray(payload?.products) ? payload.products : [])));
-    return raw.slice(0, 300).map(item => ({
+    return getProviderProductArray(payload).map(item => ({
         id: String(item.id ?? item.product_id ?? item.productId ?? ''),
         name: String(item.name ?? item.product_name ?? item.title ?? 'Sản phẩm').slice(0, 160),
         price: Number(item.price_vnd ?? item.price ?? item.unitPrice ?? 0) || 0,
@@ -730,6 +783,178 @@ function normalizeProviderProducts(providerType, payload) {
         description: String(item.description ?? item.desc ?? item.note ?? '').slice(0, 500),
         providerType
     })).filter(item => item.id);
+}
+
+async function acquireProviderStockSyncLease() {
+    const owner = crypto.randomBytes(12).toString('hex');
+    const startedAt = Date.now();
+    const result = await fbTransaction(PROVIDER_STOCK_SYNC_LEASE_PATH, current => {
+        const state = current && typeof current === 'object' ? current : {};
+        if (Number(state.expiresAt || 0) > startedAt) return undefined;
+        if (Number(state.lastStartedAt || 0) > 0
+            && startedAt - Number(state.lastStartedAt) < PROVIDER_STOCK_SYNC_MIN_INTERVAL_MS) {
+            return undefined;
+        }
+        return {
+            ...state,
+            owner,
+            startedAt,
+            lastStartedAt: startedAt,
+            expiresAt: startedAt + PROVIDER_STOCK_SYNC_LEASE_MS
+        };
+    }, 4);
+    return result.committed ? { owner, startedAt } : null;
+}
+
+async function releaseProviderStockSyncLease(lease, result) {
+    if (!lease) return;
+    try {
+        await fbTransaction(PROVIDER_STOCK_SYNC_LEASE_PATH, current => {
+            if (!current || current.owner !== lease.owner) return undefined;
+            return {
+                ...current,
+                owner: null,
+                expiresAt: 0,
+                lastCompletedAt: Date.now(),
+                lastResult: result ? {
+                    checkedProducts: Number(result.checkedProducts || 0),
+                    updatedProducts: Number(result.updatedProducts || 0),
+                    failedProviders: Number(result.failedProviders || 0)
+                } : null
+            };
+        }, 3);
+    } catch (error) {
+        console.warn('Không thể giải phóng khóa đồng bộ tồn kho:', error.message || error);
+    }
+}
+
+async function commitProviderStockUpdate(productId, expectedProduct, stock, liveProduct, syncStartedAt, options = {}) {
+    const normalizedStock = Math.max(0, Math.floor(Number(stock) || 0));
+    const normalizedCost = liveProduct ? Math.max(0, Number(liveProduct.price) || 0) : null;
+    const preventIncrease = options.preventIncrease === true;
+    const markObserved = options.markObserved === true;
+    const quantityChanged = Math.max(0, Math.floor(Number(expectedProduct.quantity) || 0)) !== normalizedStock;
+    const costChanged = normalizedCost !== null
+        && Math.max(0, Number(expectedProduct.providerCost) || 0) !== normalizedCost;
+    if (!quantityChanged && !costChanged && !markObserved) return false;
+
+    const expectedProviderId = String(expectedProduct.providerId || '').trim();
+    const expectedProviderType = String(expectedProduct.providerType || '').trim();
+    const expectedProviderProductId = String(expectedProduct.providerProductId || '').trim();
+    const result = await fbTransaction(`products/${productId}`, current => {
+        if (!current || typeof current !== 'object') return undefined;
+        if (current.sourceMode !== 'provider' && current.deliveryMode !== 'provider') return undefined;
+        if (String(current.providerId || '').trim() !== expectedProviderId) return undefined;
+        if (String(current.providerType || '').trim() !== expectedProviderType) return undefined;
+        if (String(current.providerProductId || '').trim() !== expectedProviderProductId) return undefined;
+        if (Number(current.providerStockSyncedAt || 0) >= syncStartedAt) return undefined;
+
+        const currentQuantity = Math.max(0, Math.floor(Number(current.quantity) || 0));
+        const nextQuantity = preventIncrease ? Math.min(currentQuantity, normalizedStock) : normalizedStock;
+        const nextQuantityChanged = currentQuantity !== nextQuantity;
+        const nextCostChanged = normalizedCost !== null
+            && Math.max(0, Number(current.providerCost) || 0) !== normalizedCost;
+        if (!nextQuantityChanged && !nextCostChanged && !markObserved) return undefined;
+
+        return {
+            ...current,
+            ...(nextQuantityChanged ? { quantity: nextQuantity } : {}),
+            ...(nextCostChanged ? { providerCost: normalizedCost } : {}),
+            providerStockSyncedAt: syncStartedAt,
+            updatedAt: Date.now()
+        };
+    }, 4);
+    return result.committed;
+}
+
+async function syncProviderProductStocks() {
+    if (providerStockSyncPromise) return providerStockSyncPromise;
+
+    providerStockSyncPromise = (async () => {
+        requireProviderVaultConfig();
+        const lease = await acquireProviderStockSyncLease();
+        if (!lease) {
+            return { syncedAt: Date.now(), checkedProducts: 0, updatedProducts: 0, failedProviders: 0, skipped: true };
+        }
+
+        let syncResult = null;
+        try {
+            const productsRecord = await fbSecureGet('products') || {};
+            const linkedProducts = Object.entries(productsRecord).filter(([, product]) => (
+                product && typeof product === 'object'
+                && (product.sourceMode === 'provider' || product.deliveryMode === 'provider')
+            ));
+
+            if (linkedProducts.length === 0) {
+                syncResult = { syncedAt: Date.now(), checkedProducts: 0, updatedProducts: 0, failedProviders: 0 };
+                return syncResult;
+            }
+
+            const providerRecords = await fbSecureGet(PROVIDER_VAULT_PATH) || {};
+            const productsByProvider = new Map();
+            const unavailableSourceUpdates = [];
+
+            linkedProducts.forEach(([productId, product]) => {
+                const providerId = String(product.providerId || '').trim();
+                if (!providerId || !providerRecords[providerId] || providerRecords[providerId].enabled === false) {
+                    unavailableSourceUpdates.push({ productId, product });
+                    return;
+                }
+                if (!productsByProvider.has(providerId)) productsByProvider.set(providerId, []);
+                productsByProvider.get(providerId).push([productId, product]);
+            });
+
+            const providerTasks = Array.from(productsByProvider.entries()).map(async ([providerId, products]) => {
+                const record = providerRecords[providerId];
+                try {
+                    const storedKey = decryptProviderKey(record.secret, providerId, record.type);
+                    const config = getProviderConfig(record.type);
+                    const payload = await providerRequest(record.type, config.productsPath, storedKey, { timeoutMs: 6000 });
+                    const catalog = normalizeProviderProducts(record.type, payload);
+                    const catalogById = new Map(catalog.map(item => [String(item.id), item]));
+
+                    const results = await Promise.all(products.map(([productId, product]) => {
+                        const providerProductId = String(product.providerProductId || '').trim();
+                        const liveProduct = catalogById.get(providerProductId) || null;
+                        return commitProviderStockUpdate(
+                            productId,
+                            product,
+                            liveProduct ? liveProduct.stock : 0,
+                            liveProduct,
+                            lease.startedAt
+                        );
+                    }));
+                    return { updatedProducts: results.filter(Boolean).length, failedProviders: 0 };
+                } catch (error) {
+                    return { updatedProducts: 0, failedProviders: 1 };
+                }
+            });
+
+            const unavailableSourceTask = Promise.all(unavailableSourceUpdates.map(update => commitProviderStockUpdate(
+                update.productId,
+                update.product,
+                0,
+                null,
+                lease.startedAt
+            ))).then(results => ({ updatedProducts: results.filter(Boolean).length, failedProviders: 0 }));
+            const taskResults = await Promise.all([unavailableSourceTask, ...providerTasks]);
+            syncResult = {
+                syncedAt: Date.now(),
+                checkedProducts: linkedProducts.length,
+                updatedProducts: taskResults.reduce((sum, item) => sum + item.updatedProducts, 0),
+                failedProviders: taskResults.reduce((sum, item) => sum + item.failedProviders, 0)
+            };
+            return syncResult;
+        } finally {
+            await releaseProviderStockSyncLease(lease, syncResult);
+        }
+    })();
+
+    try {
+        return await providerStockSyncPromise;
+    } finally {
+        providerStockSyncPromise = null;
+    }
 }
 
 function providerProductIdValue(value) {
@@ -948,6 +1173,12 @@ exports.handler = async (event) => {
             });
         }
 
+        if (path === '/provider/stock-sync' && method === 'POST') {
+            assertBrowserSameOrigin(event);
+            const result = await syncProviderProductStocks();
+            return ok({ data: result });
+        }
+
         if (path === '/provider/checkout' && method === 'POST') {
             requireProviderVaultConfig();
             const { username } = await requireCheckoutUser(event, apiKey);
@@ -994,12 +1225,16 @@ exports.handler = async (event) => {
             }
             const storedKey = decryptProviderKey(providerRecord.secret, providerId, providerRecord.type);
             const providerConfig = getProviderConfig(providerRecord.type);
-            const catalogPayload = await providerRequest(providerRecord.type, providerConfig.productsPath, storedKey);
+            const stockCheckStartedAt = Date.now();
+            const catalogPayload = await providerRequest(providerRecord.type, providerConfig.productsPath, storedKey, { timeoutMs: 8000 });
             const providerProducts = normalizeProviderProducts(providerRecord.type, catalogPayload);
             const liveProduct = providerProducts.find(item => String(item.id) === providerProductId);
-            if (!liveProduct) return err(404, 'PROVIDER_PRODUCT_NOT_FOUND', 'Sản phẩm không còn trong danh mục của nguồn API.');
+            if (!liveProduct) {
+                await commitProviderStockUpdate(productId, product, 0, null, stockCheckStartedAt);
+                return err(404, 'PROVIDER_PRODUCT_NOT_FOUND', 'Sản phẩm không còn trong danh mục của nguồn API.');
+            }
             if (Number(liveProduct.stock || 0) < quantity) {
-                await fbSecurePatch(`products/${productId}`, { quantity: Math.max(0, Number(liveProduct.stock || 0)), updatedAt: Date.now() });
+                await commitProviderStockUpdate(productId, product, liveProduct.stock, liveProduct, stockCheckStartedAt);
                 return err(409, 'PROVIDER_OUT_OF_STOCK', `Nguồn API chỉ còn ${Number(liveProduct.stock || 0)} sản phẩm.`);
             }
 
@@ -1011,11 +1246,13 @@ exports.handler = async (event) => {
             const totalAmount = unitPrice * quantity;
             const providerUnitCost = Number(liveProduct.price || 0);
             if (providerUnitCost > unitPrice) {
-                await fbSecurePatch(`products/${productId}`, {
-                    quantity: Math.max(0, Number(liveProduct.stock || 0)),
-                    providerCost: providerUnitCost,
-                    updatedAt: Date.now()
-                });
+                await commitProviderStockUpdate(
+                    productId,
+                    product,
+                    liveProduct.stock,
+                    liveProduct,
+                    stockCheckStartedAt
+                );
                 return err(
                     409,
                     'PROVIDER_PRICE_INCREASED',
@@ -1076,10 +1313,26 @@ exports.handler = async (event) => {
             try {
                 const purchase = await buyProviderProduct(providerRecord, providerId, providerProductId, quantity, orderId);
                 const deliveredAccounts = purchase.accounts;
+                const postPurchaseStockStartedAt = Date.now();
+                const postPurchaseStockPromise = providerRequest(
+                    providerRecord.type,
+                    providerConfig.productsPath,
+                    storedKey,
+                    { timeoutMs: 5000 }
+                ).then(payload => {
+                    const products = normalizeProviderProducts(providerRecord.type, payload);
+                    return {
+                        succeeded: true,
+                        product: products.find(item => String(item.id) === providerProductId) || null,
+                        observedAt: Date.now()
+                    };
+                }).catch(error => {
+                    console.warn('Không thể đọc lại tồn kho ngay sau khi mua:', error.message || error);
+                    return { succeeded: false, product: null };
+                });
                 const accountDetails = deliveredAccounts.length <= 1
                     ? deliveredAccounts[0]
                     : deliveredAccounts.map((item, index) => `[${index + 1}] ${item}`).join('\n');
-                const remainingStock = Math.max(0, Number(liveProduct.stock || 0) - quantity);
                 await fbSecurePatch(`orders/${orderId}`, {
                     status: 'Hoàn thành',
                     accountDetails,
@@ -1091,12 +1344,42 @@ exports.handler = async (event) => {
                     providerOrderId: purchase.providerOrderId,
                     fulfilledAt: Date.now()
                 });
-                await fbSecurePatch(`products/${productId}`, {
-                    quantity: remainingStock,
-                    providerCost: Number(liveProduct.price || product.providerCost || 0),
-                    providerProductName: liveProduct.name,
-                    updatedAt: Date.now()
-                });
+                try {
+                    await fbTransaction(`products/${productId}`, current => {
+                        if (!current || typeof current !== 'object') return undefined;
+                        if (current.sourceMode !== 'provider' && current.deliveryMode !== 'provider') return undefined;
+                        if (String(current.providerId || '').trim() !== providerId) return undefined;
+                        if (String(current.providerType || '').trim() !== String(product.providerType || '').trim()) return undefined;
+                        if (String(current.providerProductId || '').trim() !== providerProductId) return undefined;
+                        const currentSyncAt = Number(current.providerStockSyncedAt || 0);
+                        const currentQuantity = Math.max(0, Math.floor(Number(current.quantity) || 0));
+                        return {
+                            ...current,
+                            quantity: Math.max(0, currentQuantity - quantity),
+                            providerCost: Number(liveProduct.price || product.providerCost || 0),
+                            providerProductName: liveProduct.name,
+                            providerStockSyncedAt: Math.max(currentSyncAt, postPurchaseStockStartedAt),
+                            updatedAt: Date.now()
+                        };
+                    }, 4);
+                } catch (error) {
+                    console.warn('Không thể giảm tồn kho cục bộ ngay sau khi mua:', error.message || error);
+                }
+                const refreshedStock = await postPurchaseStockPromise;
+                if (refreshedStock.succeeded) {
+                    try {
+                        await commitProviderStockUpdate(
+                            productId,
+                            product,
+                            refreshedStock.product ? refreshedStock.product.stock : 0,
+                            refreshedStock.product,
+                            refreshedStock.observedAt,
+                            { preventIncrease: true, markObserved: true }
+                        );
+                    } catch (error) {
+                        console.warn('Không thể chốt tồn kho sau khi mua:', error.message || error);
+                    }
+                }
                 await fbSecureSet(`secure/providerOrderAudit/${orderId}`, {
                     providerId,
                     providerType: providerRecord.type,
