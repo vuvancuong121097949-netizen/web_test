@@ -1737,10 +1737,10 @@ const app = {
         const warrantyText = this.getWarrantyText(p);
         const categoryLabel = this.escapeHtml(this.getProductCategoryName(this.getProductCategory(p)));
         const sourceLabel = isProvider
-            ? 'Nguồn API tự động'
+            ? 'Tự Động'
             : (isAuto ? 'Tự động 24/7' : 'Admin cấp thủ công');
         const deliveryLabel = isProvider
-            ? 'Lấy hàng từ API và giao ngay sau thanh toán'
+            ? 'Giao Tự Động'
             : (isAuto ? 'Giao tự động sau thanh toán' : 'Admin xử lý và cấp tài khoản');
 
         const logoHtml = firstLogo
@@ -1764,7 +1764,7 @@ const app = {
             : '';
 
         const buyLabel = !inStock ? 'Hết hàng'
-            : this.appState.currentUser ? '<i class="fas fa-bolt"></i> Mua ngay'
+            : this.appState.currentUser ? 'Mua ngay'
                 : '<i class="fas fa-sign-in-alt"></i> Đăng nhập để mua';
 
         // Tạo overlay
@@ -1798,7 +1798,7 @@ const app = {
                         <div class="pm-option-section">
                             <div class="pm-section-heading">Thời hạn sử dụng</div>
                             <button class="pm-duration-choice is-selected" type="button" aria-pressed="true">
-                                <i class="fas fa-check"></i><span>${safeDuration}</span>
+                                <span>${safeDuration}</span>
                             </button>
                         </div>
                         ${safeDesc ? `<div class="pm-description-section"><div class="pm-section-heading">Mô tả sản phẩm</div><div class="pm-desc">${safeDesc}</div></div>` : ''}
@@ -2013,7 +2013,7 @@ const app = {
                 buyButton.innerHTML = !inStock
                     ? 'Hết hàng'
                     : (this.appState.currentUser
-                        ? '<i class="fas fa-bolt"></i> Mua ngay'
+                        ? 'Mua ngay'
                         : '<i class="fas fa-sign-in-alt"></i> Đăng nhập để mua');
             }
             if (cartButton) cartButton.disabled = !inStock;
