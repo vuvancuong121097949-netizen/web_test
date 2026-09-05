@@ -2572,7 +2572,11 @@ const app = {
             if (rawData) {
                 // Chuyển object Firebase thành mảng
                 Object.keys(rawData).forEach(key => {
-                    tempAllOrders.push({ ...rawData[key], id: key });
+                    const order = rawData[key];
+                    // Ẩn các bản ghi Telegram cũ khỏi giao diện web.
+                    if (order && (order.source === 'telegram' || order.channel === 'telegram_bot'
+                        || String(order.username || '').startsWith('tg_'))) return;
+                    tempAllOrders.push({ ...order, id: key });
                 });
 
                 // Sắp xếp mới nhất lên đầu
@@ -2725,7 +2729,10 @@ const app = {
             const tempAll = [];
             if (rawData) {
                 Object.keys(rawData).forEach(key => {
-                    tempAll.push({ ...rawData[key], memo: key });
+                    const deposit = rawData[key];
+                    if (deposit && (deposit.source === 'telegram' || deposit.source === 'telegram_bot'
+                        || deposit.telegramId !== undefined || String(deposit.username || '').startsWith('tg_'))) return;
+                    tempAll.push({ ...deposit, memo: key });
                 });
                 tempAll.sort((a, b) => b.timestamp - a.timestamp);
             }
@@ -2760,7 +2767,10 @@ const app = {
             const tempUsers = [];
             if (rawData) {
                 Object.keys(rawData).forEach(key => {
-                    tempUsers.push({ username: key, ...rawData[key] });
+                    const user = rawData[key];
+                    if (user && (user.source === 'telegram' || user.source === 'telegram_bot'
+                        || user.telegramId !== undefined || String(key).startsWith('tg_'))) return;
+                    tempUsers.push({ username: key, ...user });
                 });
             }
             this.appState.allUsers = tempUsers;

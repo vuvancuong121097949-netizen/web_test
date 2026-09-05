@@ -26,6 +26,12 @@ const TELEGRAM_ACCOUNT_NAME = String(process.env.TELEGRAM_ACCOUNT_NAME || 'VU VA
 const TELEGRAM_MIN_DEPOSIT = 10000;
 const TELEGRAM_MAX_DEPOSIT = 100000000;
 const TELEGRAM_DEPOSIT_TTL_MS = 15 * 60 * 1000;
+// Dữ liệu của bot Telegram nằm trong nhánh riêng, không trộn vào users/orders/
+// deposit_requests của website.
+const TELEGRAM_DATA_ROOT = 'telegramBot';
+const TELEGRAM_USERS_PATH = `${TELEGRAM_DATA_ROOT}/users`;
+const TELEGRAM_ORDERS_PATH = `${TELEGRAM_DATA_ROOT}/orders`;
+const TELEGRAM_DEPOSITS_PATH = `${TELEGRAM_DATA_ROOT}/deposits`;
 const PROVIDER_VAULT_PATH = 'secure/providerSources';
 const PROVIDER_STOCK_SYNC_LEASE_PATH = 'secure/providerStockSyncLease';
 const PROVIDER_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
@@ -280,6 +286,10 @@ async function addUserBalance(username, amount) {
     return fbTransaction(`users/${username}/balance`, balance => Number(balance || 0) + Number(amount || 0));
 }
 
+async function addAccountBalance(account, amount) {
+    return fbTransaction(`${account.userPath}/balance`, balance => Number(balance || 0) + Number(amount || 0));
+}
+
 // Đọc OTP key + base URL từ Firebase settings/config (đồng bộ với web + bot).
 // Cache 60s để không gọi Firebase mỗi request. Fallback env/hardcode nếu chưa cấu hình.
 let _otpCfgCache = null;
@@ -453,36 +463,51 @@ function getTelegramBotIdentity(event) {
         throw { status: 401, code: 'INVALID_TELEGRAM_BOT_AUTH', error: 'Xác thực bot Telegram không hợp lệ.' };
     }
     const telegramId = validateTelegramId(telegramIdHeader);
-    return { telegramId, username: `tg_${telegramId}` };
+    return { telegramId, username: `tg_${telegramId}`, channel: 'telegram' };
 }
 
 async function ensureTelegramUser(telegramId) {
     const identity = {
         telegramId: validateTelegramId(telegramId),
-        username: `tg_${validateTelegramId(telegramId)}`
+        username: `tg_${validateTelegramId(telegramId)}`,
+        channel: 'telegram'
     };
-    const existing = await fbSecureGet(`users/${identity.username}`);
+    const userPath = `${TELEGRAM_USERS_PATH}/${identity.telegramId}`;
+    const existing = await fbSecureGet(userPath);
     if (existing && typeof existing === 'object'
         && existing.telegramId !== undefined
         && String(existing.telegramId) !== identity.telegramId) {
         throw { status: 409, code: 'TELEGRAM_ID_COLLISION', error: 'Telegram ID đã bị trùng dữ liệu tài khoản.' };
     }
     if (!existing) {
-        await fbTransaction(`users/${identity.username}`, current => current ? undefined : ({
+        await fbTransaction(userPath, current => current ? undefined : ({
             username: identity.username,
             telegramId: identity.telegramId,
-            source: 'telegram',
+            source: 'telegram_bot',
             balance: 0,
-            sessionVersion: 0,
-            createdAt: Date.now()
+            totalDeposited: 0,
+            totalSpent: 0,
+            totalOrders: 0,
+            completedOrders: 0,
+            createdAt: Date.now(),
+            lastSeenAt: Date.now()
         }));
     }
-    const userData = await fbSecureGet(`users/${identity.username}`);
+    await fbSecurePatch(userPath, { lastSeenAt: Date.now() });
+    const userData = await fbSecureGet(userPath);
     if (!userData || typeof userData !== 'object'
         || String(userData.telegramId || '') !== identity.telegramId) {
         throw { status: 409, code: 'TELEGRAM_USER_NOT_READY', error: 'Không thể khởi tạo ví Telegram.' };
     }
-    return { username: identity.username, userData, telegramId: identity.telegramId };
+    return {
+        username: identity.username,
+        userData,
+        telegramId: identity.telegramId,
+        channel: 'telegram',
+        userPath,
+        ordersPath: TELEGRAM_ORDERS_PATH,
+        depositsPath: TELEGRAM_DEPOSITS_PATH
+    };
 }
 
 async function requireTelegramBotUser(event) {
@@ -491,6 +516,84 @@ async function requireTelegramBotUser(event) {
         throw { status: 401, code: 'TELEGRAM_BOT_AUTH_REQUIRED', error: 'Thiếu xác thực bot Telegram.' };
     }
     return ensureTelegramUser(identity.telegramId);
+}
+
+function requireTelegramBotService(event) {
+    requireTelegramBotConfig();
+    const secret = getTelegramHeader(event, 'x-telegram-bot-secret');
+    if (!secret || !safeSecretEqual(secret, TELEGRAM_BOT_SHARED_SECRET)) {
+        throw { status: 401, code: 'INVALID_TELEGRAM_BOT_AUTH', error: 'Xác thực bot Telegram không hợp lệ.' };
+    }
+}
+
+async function confirmTelegramDeposit(account, memo, amount, transactionId) {
+    const { telegramId, username, depositsPath, userPath } = account;
+    if (!transactionId) throw { status: 400, code: 'INVALID_TRANSACTION_ID', error: 'Thiếu mã giao dịch ngân hàng.' };
+    if (!Number.isInteger(amount) || amount < TELEGRAM_MIN_DEPOSIT || amount > TELEGRAM_MAX_DEPOSIT) {
+        throw { status: 400, code: 'INVALID_DEPOSIT_AMOUNT', error: 'Số tiền giao dịch không hợp lệ.' };
+    }
+    const depositPath = `${depositsPath}/${memo}`;
+    const deposit = await fbSecureGet(depositPath);
+    if (!deposit || typeof deposit !== 'object'
+        || deposit.username !== username
+        || String(deposit.telegramId || '') !== telegramId) {
+        throw { status: 404, code: 'DEPOSIT_NOT_FOUND', error: 'Không tìm thấy yêu cầu nạp tiền.' };
+    }
+    if (Number(deposit.amount || 0) !== amount) {
+        throw { status: 400, code: 'DEPOSIT_AMOUNT_MISMATCH', error: 'Số tiền chuyển khoản không khớp yêu cầu nạp.' };
+    }
+    if (String(deposit.status || '') !== 'Chờ duyệt') {
+        const userData = await fbSecureGet(userPath) || {};
+        return {
+            telegramId, memo, amount,
+            status: String(deposit.status || 'Đã xử lý'),
+            balance: Number(userData.balance || 0),
+            alreadyProcessed: true
+        };
+    }
+
+    const claim = await fbTransaction(depositPath, current => {
+        if (!current || current.status !== 'Chờ duyệt') return undefined;
+        return {
+            ...current,
+            status: 'Đang cộng tiền (Auto Telegram)',
+            approvedAt: Date.now(),
+            transactionId,
+            approvedBy: 'telegram-sepay'
+        };
+    });
+    if (!claim.committed) {
+        const latest = await fbSecureGet(depositPath) || {};
+        const userData = await fbSecureGet(userPath) || {};
+        return {
+            telegramId, memo, amount,
+            status: String(latest.status || 'Đã xử lý'),
+            balance: Number(userData.balance || 0),
+            alreadyProcessed: true
+        };
+    }
+
+    try {
+        const balanceResult = await addAccountBalance(account, amount);
+        await fbSecurePatch(depositPath, {
+            status: 'Đã duyệt (Auto Telegram)',
+            creditedAt: Date.now(),
+            creditedAmount: amount,
+            balanceAfter: Number(balanceResult.value || 0)
+        });
+        return {
+            telegramId, memo, amount,
+            status: 'Đã duyệt (Auto Telegram)',
+            balance: Number(balanceResult.value || 0),
+            processed: true
+        };
+    } catch (creditError) {
+        await fbSecurePatch(depositPath, {
+            status: 'Lỗi cộng tiền - cần kiểm tra',
+            creditError: String(creditError.message || 'Không thể cộng tiền').slice(0, 240)
+        });
+        throw creditError;
+    }
 }
 
 function createAdminSessionToken(sessionVersion) {
@@ -541,6 +644,20 @@ function validateFirebaseKeySegment(value, label = 'Mã dữ liệu') {
         throw { status: 400, code: 'INVALID_KEY', error: `${label} không hợp lệ.` };
     }
     return segment;
+}
+
+function getProductDuration(product) {
+    const direct = String(
+        product?.duration
+        || product?.productDuration
+        || product?.term
+        || product?.validity
+        || ''
+    ).trim();
+    if (direct) return direct.slice(0, 120);
+    const sourceText = String(`${product?.name || ''} ${product?.desc || ''}`).trim();
+    const match = sourceText.match(/\b\d{1,4}\s*(?:ngày|ngay|tháng|thang|năm|nam|day|days|month|months|year|years)\b/i);
+    return match ? match[0].replace(/\s+/g, ' ').slice(0, 120) : 'Dùng ngay';
 }
 
 function createUserSessionToken(username, sessionVersion) {
@@ -594,14 +711,23 @@ async function requireCheckoutUser(event, apiKey) {
     const telegramIdentity = getTelegramBotIdentity(event);
     if (telegramIdentity) return ensureTelegramUser(telegramIdentity.telegramId);
     const bearerToken = getBearerToken(event);
-    if (!bearerToken && apiKey) return authenticate(apiKey);
+    if (!bearerToken && apiKey) {
+        const account = await authenticate(apiKey);
+        return { ...account, channel: 'web', userPath: `users/${account.username}`, ordersPath: 'orders' };
+    }
     const payload = verifyUserSessionToken(bearerToken);
     const userData = await fbSecureGet(`users/${payload.username}`);
     if (!userData || typeof userData !== 'object'
         || Number(userData.sessionVersion || 0) !== Number(payload.sv || 0)) {
         throw { status: 401, code: 'USER_SESSION_REVOKED', error: 'Phiên đăng nhập không còn hiệu lực. Vui lòng đăng nhập lại.' };
     }
-    return { username: payload.username, userData };
+    return {
+        username: payload.username,
+        userData,
+        channel: 'web',
+        userPath: `users/${payload.username}`,
+        ordersPath: 'orders'
+    };
 }
 
 function getAdminToken(event) {
@@ -1221,7 +1347,7 @@ exports.handler = async (event) => {
 
     // Root info
     if (path === '/' || path === '')
-        return ok({ service: 'TaiKhoanXin API (Netlify)', version: '1.4.0', endpoints: ['/api/balance', '/api/apps', '/api/rent', '/api/otp/:id', '/api/cancel/:id', '/api/history', '/api/user/catalog', '/api/user/balance', '/api/user/orders', '/api/telegram/deposit', '/api/telegram/deposit/:memo', '/api/telegram/deposit/confirm', '/api/provider/checkout', '/api/provider/order/:id'] });
+        return ok({ service: 'TaiKhoanXin API (Netlify)', version: '1.5.0', endpoints: ['/api/balance', '/api/apps', '/api/rent', '/api/otp/:id', '/api/cancel/:id', '/api/history', '/api/user/catalog', '/api/user/balance', '/api/user/orders', '/api/telegram/deposit', '/api/telegram/deposit/:memo', '/api/telegram/deposit/confirm', '/api/telegram/deposit/confirm-by-memo', '/api/telegram/admin/stats', '/api/provider/checkout', '/api/provider/order/:id'] });
 
     try {
         // Các thao tác đăng nhập, quản trị và mua hàng chỉ nhận yêu cầu cùng website.
@@ -1272,7 +1398,7 @@ exports.handler = async (event) => {
                     return {
                         id,
                         name: String(product.name || 'Sản phẩm').slice(0, 160),
-                        duration: String(product.duration || '').slice(0, 120),
+                        duration: getProductDuration(product),
                         format: String(product.format || '').slice(0, 120),
                         desc: String(product.desc || '').slice(0, 1200),
                         price,
@@ -1280,8 +1406,7 @@ exports.handler = async (event) => {
                         quantity: Math.max(0, Math.floor(Number(product.quantity) || 0)),
                         logoUrl: Array.isArray(product.logoUrls) ? String(product.logoUrls[0] || '') : '',
                         warranty: String(product.warranty || 'Không bảo hành').slice(0, 160),
-                        warrantyDays: Number(product.warrantyDays || 0),
-                        providerLabel: String(product.providerLabel || 'Nguồn API').slice(0, 80)
+                        warrantyDays: Number(product.warrantyDays || 0)
                     };
                 })
                 .filter(product => product.price > 0)
@@ -1299,8 +1424,9 @@ exports.handler = async (event) => {
         // ---- GET /api/user/orders ----
         // Chỉ trả lịch sử tóm tắt; thông tin tài khoản được lấy riêng theo orderId.
         if (path === '/user/orders' && method === 'GET') {
-            const { username } = await requireCheckoutUser(event, apiKey);
-            const allOrders = await fbSecureGet('orders') || {};
+            const account = await requireCheckoutUser(event, apiKey);
+            const { username } = account;
+            const allOrders = await fbSecureGet(account.ordersPath || 'orders') || {};
             const orders = Object.entries(allOrders)
                 .filter(([, order]) => order && typeof order === 'object' && order.username === username)
                 .map(([orderId, order]) => ({
@@ -1321,20 +1447,30 @@ exports.handler = async (event) => {
         }
 
         // ---- POST /api/telegram/deposit ----
-        // Tạo yêu cầu nạp tiền cho ví gắn với Telegram ID. Chỉ bot backend biết secret này.
+        // Tạo yêu cầu nạp tiền trong telegramBot/deposits, không đưa vào hàng duyệt của website.
         if (path === '/telegram/deposit' && method === 'POST') {
-            const { telegramId, username } = await requireTelegramBotUser(event);
+            const { telegramId, username, depositsPath } = await requireTelegramBotUser(event);
             const amount = Number(body.amount);
             if (!Number.isInteger(amount) || amount < TELEGRAM_MIN_DEPOSIT || amount > TELEGRAM_MAX_DEPOSIT) {
                 return err(400, 'INVALID_DEPOSIT_AMOUNT', `Số tiền nạp phải từ ${TELEGRAM_MIN_DEPOSIT.toLocaleString('vi-VN')}đ đến ${TELEGRAM_MAX_DEPOSIT.toLocaleString('vi-VN')}đ.`);
             }
             const now = Date.now();
-            const memo = `TG${telegramId}_${now.toString(36)}_${crypto.randomBytes(4).toString('hex')}`;
+            let memo = '';
+            for (let attempt = 0; attempt < 8; attempt += 1) {
+                const candidate = `Chuyentien_${crypto.randomInt(10000, 100000)}`;
+                if (!(await fbSecureGet(`${depositsPath}/${candidate}`))) {
+                    memo = candidate;
+                    break;
+                }
+            }
+            if (!memo) {
+                return err(503, 'DEPOSIT_MEMO_UNAVAILABLE', 'Không thể tạo mã nạp tiền lúc này. Vui lòng thử lại.');
+            }
             const expiresAt = now + TELEGRAM_DEPOSIT_TTL_MS;
-            await fbSecureSet(`deposit_requests/${memo}`, {
+            await fbSecureSet(`${depositsPath}/${memo}`, {
                 username,
                 telegramId,
-                source: 'telegram',
+                source: 'telegram_bot',
                 amount,
                 memo,
                 timestamp: now,
@@ -1362,15 +1498,16 @@ exports.handler = async (event) => {
 
         // ---- GET /api/telegram/deposit/:memo ----
         if (path.startsWith('/telegram/deposit/') && method === 'GET') {
-            const { telegramId, username } = await requireTelegramBotUser(event);
+            const account = await requireTelegramBotUser(event);
+            const { telegramId, username, depositsPath, userPath } = account;
             const memo = validateFirebaseKeySegment(path.replace('/telegram/deposit/', ''), 'Mã nạp tiền');
-            const deposit = await fbSecureGet(`deposit_requests/${memo}`);
+            const deposit = await fbSecureGet(`${depositsPath}/${memo}`);
             if (!deposit || typeof deposit !== 'object'
                 || deposit.username !== username
                 || String(deposit.telegramId || '') !== telegramId) {
                 return err(404, 'DEPOSIT_NOT_FOUND', 'Không tìm thấy yêu cầu nạp tiền.');
             }
-            const userData = await fbSecureGet(`users/${username}`) || {};
+            const userData = await fbSecureGet(userPath) || {};
             return ok({
                 data: {
                     telegramId,
@@ -1389,75 +1526,27 @@ exports.handler = async (event) => {
         // SePay webhook của bot gọi endpoint này. Giao dịch được claim bằng Firebase transaction
         // nên webhook gửi lại không cộng tiền lần hai.
         if (path === '/telegram/deposit/confirm' && method === 'POST') {
-            const { telegramId, username } = await requireTelegramBotUser(event);
+            const account = await requireTelegramBotUser(event);
             const memo = validateFirebaseKeySegment(body.memo, 'Mã nạp tiền');
             const amount = Number(body.amount);
             const transactionId = String(body.transactionId || '').trim().slice(0, 160);
-            if (!transactionId) return err(400, 'INVALID_TRANSACTION_ID', 'Thiếu mã giao dịch ngân hàng.');
-            if (!Number.isInteger(amount) || amount < TELEGRAM_MIN_DEPOSIT || amount > TELEGRAM_MAX_DEPOSIT) {
-                return err(400, 'INVALID_DEPOSIT_AMOUNT', 'Số tiền giao dịch không hợp lệ.');
-            }
-            const deposit = await fbSecureGet(`deposit_requests/${memo}`);
-            if (!deposit || typeof deposit !== 'object'
-                || deposit.username !== username
-                || String(deposit.telegramId || '') !== telegramId) {
+            return ok({ data: await confirmTelegramDeposit(account, memo, amount, transactionId) });
+        }
+
+        // ---- POST /api/telegram/deposit/confirm-by-memo ----
+        // Chỉ bot server được gọi; SePay không cần biết ID Telegram của khách.
+        if (path === '/telegram/deposit/confirm-by-memo' && method === 'POST') {
+            requireTelegramBotService(event);
+            const memo = validateFirebaseKeySegment(body.memo, 'Mã nạp tiền');
+            const deposit = await fbSecureGet(`${TELEGRAM_DEPOSITS_PATH}/${memo}`);
+            if (!deposit || typeof deposit !== 'object' || deposit.source !== 'telegram_bot') {
                 return err(404, 'DEPOSIT_NOT_FOUND', 'Không tìm thấy yêu cầu nạp tiền.');
             }
-            if (Number(deposit.amount || 0) !== amount) {
-                return err(400, 'DEPOSIT_AMOUNT_MISMATCH', 'Số tiền chuyển khoản không khớp yêu cầu nạp.');
-            }
-            if (String(deposit.status || '') !== 'Chờ duyệt') {
-                const userData = await fbSecureGet(`users/${username}`) || {};
-                return ok({ data: {
-                    telegramId, memo, amount,
-                    status: String(deposit.status || 'Đã xử lý'),
-                    balance: Number(userData.balance || 0),
-                    alreadyProcessed: true
-                } });
-            }
-
-            const claim = await fbTransaction(`deposit_requests/${memo}`, current => {
-                if (!current || current.status !== 'Chờ duyệt') return undefined;
-                return {
-                    ...current,
-                    status: 'Đang cộng tiền (Auto Telegram)',
-                    approvedAt: Date.now(),
-                    transactionId,
-                    approvedBy: 'telegram-sepay'
-                };
-            });
-            if (!claim.committed) {
-                const latest = await fbSecureGet(`deposit_requests/${memo}`) || {};
-                const userData = await fbSecureGet(`users/${username}`) || {};
-                return ok({ data: {
-                    telegramId, memo, amount,
-                    status: String(latest.status || 'Đã xử lý'),
-                    balance: Number(userData.balance || 0),
-                    alreadyProcessed: true
-                } });
-            }
-
-            try {
-                const balanceResult = await addUserBalance(username, amount);
-                await fbSecurePatch(`deposit_requests/${memo}`, {
-                    status: 'Đã duyệt (Auto Telegram)',
-                    creditedAt: Date.now(),
-                    creditedAmount: amount,
-                    balanceAfter: Number(balanceResult.value || 0)
-                });
-                return ok({ data: {
-                    telegramId, memo, amount,
-                    status: 'Đã duyệt (Auto Telegram)',
-                    balance: Number(balanceResult.value || 0),
-                    processed: true
-                } });
-            } catch (creditError) {
-                await fbSecurePatch(`deposit_requests/${memo}`, {
-                    status: 'Lỗi cộng tiền - cần kiểm tra',
-                    creditError: String(creditError.message || 'Không thể cộng tiền').slice(0, 240)
-                });
-                throw creditError;
-            }
+            const telegramId = validateTelegramId(deposit.telegramId);
+            const account = await ensureTelegramUser(telegramId);
+            const amount = Number(body.amount);
+            const transactionId = String(body.transactionId || '').trim().slice(0, 160);
+            return ok({ data: await confirmTelegramDeposit(account, memo, amount, transactionId) });
         }
 
         if (path === '/provider/stock-sync' && method === 'POST') {
@@ -1468,7 +1557,8 @@ exports.handler = async (event) => {
 
         if (path === '/provider/checkout' && method === 'POST') {
             requireProviderVaultConfig();
-            const { username } = await requireCheckoutUser(event, apiKey);
+            const account = await requireCheckoutUser(event, apiKey);
+            const { username, userPath, ordersPath } = account;
             const productId = validateFirebaseKeySegment(body.productId, 'Mã sản phẩm');
             const orderId = validateFirebaseKeySegment(body.orderId, 'Mã đơn hàng');
             const quantity = Number(body.quantity);
@@ -1476,7 +1566,8 @@ exports.handler = async (event) => {
                 return err(400, 'INVALID_QUANTITY', 'Số lượng mua phải từ 1 đến 100.');
             }
 
-            const existingOrder = await fbSecureGet(`orders/${orderId}`);
+            const orderPath = `${ordersPath}/${orderId}`;
+            const existingOrder = await fbSecureGet(orderPath);
             if (existingOrder) {
                 if (existingOrder.username === username
                     && existingOrder.fulfillmentSource === 'provider'
@@ -1550,10 +1641,14 @@ exports.handler = async (event) => {
             const dateDisplay = new Date(now).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
             const orderBase = {
                 username,
+                ...(account.channel === 'telegram' ? {
+                    telegramId: account.telegramId,
+                    channel: 'telegram_bot'
+                } : {}),
                 productId,
                 productName: `${product.name || liveProduct.name} (x${quantity})`,
                 quantity,
-                duration: product.duration || '',
+                duration: getProductDuration(product),
                 productFormat: product.format || '',
                 price: totalAmount,
                 date: dateDisplay,
@@ -1568,30 +1663,30 @@ exports.handler = async (event) => {
                 providerType: providerRecord.type,
                 providerLabel: String(providerRecord.label || product.providerLabel || 'Nguồn API').slice(0, 80),
                 providerProductId,
-                status: 'Đang lấy hàng từ nguồn API...',
+                status: 'Đang xử lý đơn hàng...',
                 providerPurchaseState: 'reserved',
-                accountDetails: 'Đơn đã thanh toán và đang lấy tài khoản từ nguồn API.'
+                accountDetails: 'Đơn đã thanh toán và đang được xử lý.'
             };
 
-            const reservation = await fbTransaction(`orders/${orderId}`, current => current ? undefined : orderBase);
+            const reservation = await fbTransaction(orderPath, current => current ? undefined : orderBase);
             if (!reservation.committed) return err(409, 'ORDER_ALREADY_EXISTS', 'Đơn hàng đã được tạo. Vui lòng xem trong lịch sử đơn.');
 
-            const debit = await fbTransaction(`users/${username}/balance`, balance => {
+            const debit = await fbTransaction(`${userPath}/balance`, balance => {
                 const available = Number(balance || 0);
                 if (available < totalAmount) return undefined;
                 return available - totalAmount;
             });
             if (!debit.committed) {
-                await fbSecurePatch(`orders/${orderId}`, {
+                await fbSecurePatch(orderPath, {
                     status: 'Hủy - Số dư không đủ',
                     providerPurchaseState: 'cancelled',
-                    accountDetails: 'Số dư không đủ để thanh toán. Nguồn API chưa bị gọi.',
+                    accountDetails: 'Số dư không đủ để thanh toán.',
                     cancelledAt: Date.now()
                 });
                 return err(402, 'INSUFFICIENT_BALANCE', 'Số dư không đủ để thanh toán sản phẩm.');
             }
 
-            await fbSecurePatch(`orders/${orderId}`, {
+            await fbSecurePatch(orderPath, {
                 paymentState: 'paid',
                 providerPurchaseState: 'processing',
                 balanceAfterPayment: Number(debit.value || 0)
@@ -1620,7 +1715,7 @@ exports.handler = async (event) => {
                 const accountDetails = deliveredAccounts.length <= 1
                     ? deliveredAccounts[0]
                     : deliveredAccounts.map((item, index) => `[${index + 1}] ${item}`).join('\n');
-                await fbSecurePatch(`orders/${orderId}`, {
+                await fbSecurePatch(orderPath, {
                     status: 'Hoàn thành',
                     accountDetails,
                     deliveredAccounts,
@@ -1690,24 +1785,24 @@ exports.handler = async (event) => {
                 });
             } catch (providerError) {
                 if (providerError.uncertain) {
-                    await fbSecurePatch(`orders/${orderId}`, {
+                    await fbSecurePatch(orderPath, {
                         status: 'Cần admin kiểm tra nguồn',
                         providerPurchaseState: 'uncertain',
-                        accountDetails: 'Nguồn API chưa trả kết quả rõ ràng. Admin cần kiểm tra đơn bên nguồn trước khi hoàn tiền.',
+                        accountDetails: 'Đơn đang được kiểm tra. Vui lòng liên hệ hỗ trợ nếu cần.',
                         providerError: String(providerError.error || 'Không có phản hồi rõ ràng').slice(0, 240)
                     });
                     throw {
                         status: 502,
                         code: 'PROVIDER_PURCHASE_UNCERTAIN',
-                        error: 'Nguồn API chưa trả kết quả rõ ràng. Đơn đã chuyển cho admin kiểm tra và chưa bị gọi mua lại.'
+                        error: 'Đơn chưa nhận được kết quả đầy đủ. Đơn đã chuyển cho admin kiểm tra và chưa bị xử lý lại.'
                     };
                 }
 
-                const refund = await addUserBalance(username, totalAmount);
-                await fbSecurePatch(`orders/${orderId}`, {
+                const refund = await addAccountBalance(account, totalAmount);
+                await fbSecurePatch(orderPath, {
                     status: 'Hủy - Đã hoàn tiền',
                     providerPurchaseState: 'refunded',
-                    accountDetails: 'Nguồn API từ chối đơn. Hệ thống đã hoàn tiền vào số dư web.',
+                    accountDetails: 'Đơn không thể hoàn tất. Hệ thống đã hoàn tiền vào số dư.',
                     providerError: String(providerError.error || 'Nguồn từ chối đơn').slice(0, 240),
                     refundedAt: Date.now(),
                     refundedAmount: totalAmount,
@@ -1724,9 +1819,10 @@ exports.handler = async (event) => {
         // ---- GET /api/provider/order/:id ----
         // Trả thông tin giao hàng cho đúng chủ đơn để bot có thể giao tài khoản.
         if (path.startsWith('/provider/order/') && method === 'GET') {
-            const { username } = await requireCheckoutUser(event, apiKey);
+            const account = await requireCheckoutUser(event, apiKey);
+            const { username, ordersPath } = account;
             const orderId = validateFirebaseKeySegment(path.replace('/provider/order/', ''), 'Mã đơn hàng');
-            const order = await fbSecureGet(`orders/${orderId}`);
+            const order = await fbSecureGet(`${ordersPath}/${orderId}`);
             if (!order || typeof order !== 'object' || order.username !== username) {
                 return err(404, 'ORDER_NOT_FOUND', 'Không tìm thấy đơn hàng hoặc bạn không có quyền xem đơn này.');
             }
@@ -1742,10 +1838,67 @@ exports.handler = async (event) => {
                     deliveredQuantity: Number(order.deliveredQuantity || 0),
                     warranty: String(order.warranty || 'Không bảo hành').slice(0, 160),
                     warrantyDays: Number(order.warrantyDays || 0),
-                    providerLabel: String(order.providerLabel || 'Nguồn API').slice(0, 80),
                     fulfilledAt: Number(order.fulfilledAt || 0)
                 }
             });
+        }
+
+        // ---- GET /api/telegram/admin/stats ----
+        // Thống kê riêng của bot Telegram. Không đọc users/orders của website.
+        if (path === '/telegram/admin/stats' && method === 'GET') {
+            await requireTelegramBotUser(event);
+            const [usersRecord, ordersRecord, depositsRecord] = await Promise.all([
+                fbSecureGet(TELEGRAM_USERS_PATH),
+                fbSecureGet(TELEGRAM_ORDERS_PATH),
+                fbSecureGet(TELEGRAM_DEPOSITS_PATH)
+            ]);
+            const users = usersRecord && typeof usersRecord === 'object' ? usersRecord : {};
+            const orders = ordersRecord && typeof ordersRecord === 'object' ? ordersRecord : {};
+            const deposits = depositsRecord && typeof depositsRecord === 'object' ? depositsRecord : {};
+            const orderEntries = Object.entries(orders).filter(([, order]) => order && typeof order === 'object');
+            const depositEntries = Object.entries(deposits).filter(([, deposit]) => deposit && typeof deposit === 'object');
+            const isCompleted = order => String(order.status || '') === 'Hoàn thành'
+                || String(order.providerPurchaseState || '') === 'completed';
+            const isCredited = deposit => Number(deposit.creditedAt || 0) > 0
+                || String(deposit.status || '').includes('Đã duyệt');
+            const completedOrders = orderEntries.filter(([, order]) => isCompleted(order));
+            const creditedDeposits = depositEntries.filter(([, deposit]) => isCredited(deposit));
+            const customers = Object.entries(users).map(([telegramId, user]) => {
+                const userOrders = orderEntries.filter(([, order]) => (
+                    String(order.telegramId || '') === String(telegramId)
+                    || String(order.username || '') === `tg_${telegramId}`
+                ));
+                const userDeposits = depositEntries.filter(([, deposit]) => (
+                    String(deposit.telegramId || '') === String(telegramId)
+                ));
+                const finished = userOrders.filter(([, order]) => isCompleted(order));
+                const deposited = userDeposits
+                    .filter(([, deposit]) => isCredited(deposit))
+                    .reduce((sum, [, deposit]) => sum + Number(deposit.creditedAmount || deposit.amount || 0), 0);
+                const spent = finished.reduce((sum, [, order]) => sum + Number(order.price || 0), 0);
+                return {
+                    telegramId: String(telegramId),
+                    balance: Number(user.balance || 0),
+                    orders: userOrders.length,
+                    completedOrders: finished.length,
+                    deposited,
+                    spent,
+                    createdAt: Number(user.createdAt || 0),
+                    lastSeenAt: Number(user.lastSeenAt || user.createdAt || 0)
+                };
+            }).sort((a, b) => b.lastSeenAt - a.lastSeenAt).slice(0, 100);
+            return ok({ data: {
+                summary: {
+                    customers: Object.keys(users).length,
+                    orders: orderEntries.length,
+                    completedOrders: completedOrders.length,
+                    revenue: completedOrders.reduce((sum, [, order]) => sum + Number(order.price || 0), 0),
+                    deposits: creditedDeposits.length,
+                    depositedAmount: creditedDeposits.reduce((sum, [, deposit]) => sum + Number(deposit.creditedAmount || deposit.amount || 0), 0),
+                    balances: Object.values(users).reduce((sum, user) => sum + Number(user?.balance || 0), 0)
+                },
+                customers
+            } });
         }
 
         // ---- KÉT API NHÀ CUNG CẤP (chỉ admin) ----
