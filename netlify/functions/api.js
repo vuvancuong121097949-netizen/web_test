@@ -34,7 +34,9 @@ const TELEGRAM_ORDERS_PATH = `${TELEGRAM_DATA_ROOT}/orders`;
 const TELEGRAM_DEPOSITS_PATH = `${TELEGRAM_DATA_ROOT}/deposits`;
 const PROVIDER_VAULT_PATH = 'secure/providerSources';
 const PROVIDER_STOCK_SYNC_LEASE_PATH = 'secure/providerStockSyncLease';
-const PROVIDER_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+// Phiên quản trị nguồn API được gia hạn khi admin còn hoạt động.
+// Token chỉ là phiên truy cập đã ký; API key thật vẫn nằm ở Netlify/Firebase mã hóa.
+const PROVIDER_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const USER_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const PROVIDER_STOCK_SYNC_MIN_INTERVAL_MS = 4 * 1000;
 const PROVIDER_STOCK_SYNC_LEASE_MS = 10 * 1000;
@@ -1818,10 +1820,13 @@ exports.handler = async (event) => {
                     refundedAmount: totalAmount,
                     balanceAfterRefund: Number(refund.value || 0)
                 });
+                const publicProviderError = providerError.code === 'PROVIDER_OUT_OF_STOCK'
+                    ? 'Sản phẩm vừa hết hàng.'
+                    : 'Sản phẩm tạm thời chưa thể xử lý tự động.';
                 throw {
                     status: providerError.status || 409,
                     code: providerError.code || 'PROVIDER_PURCHASE_FAILED',
-                    error: `${providerError.error || 'Nguồn API từ chối đơn.'} Tiền đã được hoàn vào số dư web.`
+                    error: `${publicProviderError} Tiền đã được hoàn vào số dư.`
                 };
             }
         }
@@ -1941,6 +1946,18 @@ exports.handler = async (event) => {
             return ok({
                 data: {
                     token: createAdminSessionToken(adminUser.sessionVersion),
+                    expiresIn: PROVIDER_SESSION_TTL_MS,
+                    expiresAt: Date.now() + PROVIDER_SESSION_TTL_MS
+                }
+            });
+        }
+
+        if (path === '/admin/session/refresh' && method === 'POST') {
+            requireProviderVaultConfig();
+            const admin = await requireAdminSession(event);
+            return ok({
+                data: {
+                    token: createAdminSessionToken(admin.userData.sessionVersion),
                     expiresIn: PROVIDER_SESSION_TTL_MS,
                     expiresAt: Date.now() + PROVIDER_SESSION_TTL_MS
                 }

@@ -2545,7 +2545,7 @@ const app = {
         this._productInventoryRef = null;
         this._productInventoryListener = null;
         localStorage.removeItem('accstore_user');
-        sessionStorage.removeItem('accstore_provider_admin_token');
+        this.clearProviderAdminToken();
         sessionStorage.removeItem('accstore_user_session_token');
         this.appState.currentUser = null;
         this.providerAdminState.providers = [];
@@ -3939,8 +3939,45 @@ const app = {
     },
 
     getProviderAdminToken: function () {
-        try { return sessionStorage.getItem('accstore_provider_admin_token') || ''; }
-        catch (e) { return ''; }
+        try {
+            return sessionStorage.getItem('accstore_provider_admin_token')
+                || localStorage.getItem('accstore_provider_admin_token')
+                || '';
+        } catch (e) { return ''; }
+    },
+
+    setProviderAdminToken: function (token) {
+        const value = String(token || '').trim();
+        if (!value) return;
+        try { sessionStorage.setItem('accstore_provider_admin_token', value); } catch (e) { /* ignore */ }
+        try { localStorage.setItem('accstore_provider_admin_token', value); } catch (e) { /* ignore */ }
+    },
+
+    clearProviderAdminToken: function () {
+        try { sessionStorage.removeItem('accstore_provider_admin_token'); } catch (e) { /* ignore */ }
+        try { localStorage.removeItem('accstore_provider_admin_token'); } catch (e) { /* ignore */ }
+    },
+
+    refreshProviderAdminSession: async function () {
+        if (this.isProviderDemoMode()) return true;
+        const candidates = [...new Set([this.getProviderAdminToken(), this.getUserSessionToken()].filter(Boolean))];
+        for (const token of candidates) {
+            try {
+                const response = await fetch('/api/admin/session/refresh', {
+                    method: 'POST',
+                    headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+                    cache: 'no-store'
+                });
+                const payload = await response.json();
+                if (response.ok && payload?.success !== false && payload?.data?.token) {
+                    this.setProviderAdminToken(payload.data.token);
+                    return true;
+                }
+            } catch (error) {
+                console.warn('Không thể gia hạn phiên quản trị nguồn API:', error.message);
+            }
+        }
+        return false;
     },
 
     setProviderVaultMode: function (mode, message = '') {
@@ -4028,10 +4065,10 @@ const app = {
         if (!response.ok || payload?.success === false) {
             if (response.status === 401) {
                 if (vaultToken && userToken && !options.userSessionFallback) {
-                    sessionStorage.removeItem('accstore_provider_admin_token');
+                    this.clearProviderAdminToken();
                     return this.providerAdminRequest(path, { ...options, userSessionFallback: true });
                 }
-                if (vaultToken) sessionStorage.removeItem('accstore_provider_admin_token');
+                if (vaultToken) this.clearProviderAdminToken();
                 if (!vaultToken && userToken) sessionStorage.removeItem('accstore_user_session_token');
             }
             const error = new Error(payload?.error || 'Không thể xử lý yêu cầu.');
@@ -4057,9 +4094,10 @@ const app = {
         }
 
         const sessionLabel = document.getElementById('provider-session-label');
-        if (sessionLabel) sessionLabel.innerHTML = '<i class="fas fa-circle-check"></i> Đã xác thực bằng phiên đăng nhập quản trị';
+        if (sessionLabel) sessionLabel.innerHTML = '<i class="fas fa-circle-check"></i> Phiên quản trị đã xác thực · tự gia hạn khi đang sử dụng';
         this.setProviderVaultMode('loading');
         try {
+            await this.refreshProviderAdminSession();
             const status = await this.providerAdminRequest('/status');
             this.providerAdminState.configured = status.configured === true;
             if (!this.providerAdminState.configured) {
@@ -4100,7 +4138,7 @@ const app = {
                 method: 'POST',
                 body: { username: 'admin', password }
             });
-            sessionStorage.setItem('accstore_provider_admin_token', data.token);
+            this.setProviderAdminToken(data.token);
             if (input) input.value = '';
             this.showToast('Đã mở két API cho phiên làm việc này.', 'success');
             await this.loadProviderVault();
@@ -4119,7 +4157,7 @@ const app = {
             this.showToast('Chế độ demo không tạo phiên thật và không cần khóa két.', 'warning');
             return;
         }
-        sessionStorage.removeItem('accstore_provider_admin_token');
+        this.clearProviderAdminToken();
         this.providerAdminState.providers = [];
         this.providerAdminState.productsByProvider = {};
         this.appState.providerSources = [];
