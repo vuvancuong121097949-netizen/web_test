@@ -1347,7 +1347,7 @@ exports.handler = async (event) => {
 
     // Root info
     if (path === '/' || path === '')
-        return ok({ service: 'TaiKhoanXin API (Netlify)', version: '1.5.0', endpoints: ['/api/balance', '/api/apps', '/api/rent', '/api/otp/:id', '/api/cancel/:id', '/api/history', '/api/user/catalog', '/api/user/balance', '/api/user/orders', '/api/telegram/deposit', '/api/telegram/deposit/:memo', '/api/telegram/deposit/confirm', '/api/telegram/deposit/confirm-by-memo', '/api/telegram/admin/stats', '/api/provider/checkout', '/api/provider/order/:id'] });
+        return ok({ service: 'TaiKhoanXin API (Netlify)', version: '1.6.0', endpoints: ['/api/balance', '/api/apps', '/api/rent', '/api/otp/:id', '/api/cancel/:id', '/api/history', '/api/user/catalog', '/api/user/balance', '/api/user/orders', '/api/telegram/deposit', '/api/telegram/deposit/:memo', '/api/telegram/deposit/confirm', '/api/telegram/deposit/confirm-by-memo', '/api/telegram/admin/stats', '/api/provider/checkout', '/api/provider/order/:id'] });
 
     try {
         // Các thao tác đăng nhập, quản trị và mua hàng chỉ nhận yêu cầu cùng website.
@@ -1385,7 +1385,7 @@ exports.handler = async (event) => {
         // Danh mục dành cho bot/ứng dụng bên ngoài. Chỉ trả sản phẩm giao từ provider,
         // không trả API key nguồn hoặc dữ liệu kho nội bộ.
         if (path === '/user/catalog' && method === 'GET') {
-            const { username } = await requireCheckoutUser(event, apiKey);
+            const { username, channel } = await requireCheckoutUser(event, apiKey);
             const rawProducts = await fbSecureGet('products') || {};
             const events = await fbSecureGet('settings/events') || {};
             const discountPercent = Math.min(100, Math.max(0, Number(events.discountPercent || 0)));
@@ -1393,7 +1393,11 @@ exports.handler = async (event) => {
                 .filter(([, product]) => product && typeof product === 'object')
                 .filter(([, product]) => product.sourceMode === 'provider' || product.deliveryMode === 'provider')
                 .map(([id, product]) => {
-                    const price = Number(product.price || 0);
+                    const webPrice = Number(product.price || 0);
+                    const telegramPrice = Number(product.telegramPrice || 0);
+                    const price = channel === 'telegram' && Number.isFinite(telegramPrice) && telegramPrice > 0
+                        ? telegramPrice
+                        : webPrice;
                     const finalPrice = Math.round(price - (price * discountPercent / 100));
                     return {
                         id,
@@ -1411,7 +1415,7 @@ exports.handler = async (event) => {
                 })
                 .filter(product => product.price > 0)
                 .sort((a, b) => Number(b.quantity > 0) - Number(a.quantity > 0) || a.name.localeCompare(b.name, 'vi'));
-            return ok({ data: { username, discountPercent, products } });
+            return ok({ data: { username, channel, discountPercent, products } });
         }
 
         // ---- GET /api/user/balance ----
@@ -1618,7 +1622,12 @@ exports.handler = async (event) => {
 
             const events = await fbSecureGet('settings/events') || {};
             const discountPercent = Math.min(100, Math.max(0, Number(events.discountPercent || 0)));
-            const basePrice = Number(product.price || 0);
+            const configuredTelegramPrice = Number(product.telegramPrice || 0);
+            const basePrice = account.channel === 'telegram'
+                && Number.isFinite(configuredTelegramPrice)
+                && configuredTelegramPrice > 0
+                ? configuredTelegramPrice
+                : Number(product.price || 0);
             if (!Number.isFinite(basePrice) || basePrice <= 0) return err(400, 'INVALID_PRODUCT_PRICE', 'Giá bán sản phẩm không hợp lệ.');
             const unitPrice = Math.round(basePrice - (basePrice * discountPercent / 100));
             const totalAmount = unitPrice * quantity;
@@ -1651,6 +1660,7 @@ exports.handler = async (event) => {
                 duration: getProductDuration(product),
                 productFormat: product.format || '',
                 price: totalAmount,
+                priceChannel: account.channel === 'telegram' ? 'telegram' : 'web',
                 date: dateDisplay,
                 timestamp: now,
                 purchasedAt: now,

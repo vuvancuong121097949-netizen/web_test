@@ -2856,3 +2856,56 @@ body.light-theme #deposit-countdown-box {
     border: 1px solid #ffe58f !important;
     color: #d46b08 !important;
 }
+
+/* Keep the home hero heading centered and upright at every viewport size. */
+html body #view-home.active .hero {
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+html body #view-home.active .hero-content {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 auto !important;
+    text-align: center !important;
+}
+
+html body #view-home.active .hero-content h1 {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 auto !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+}
+
+html body #view-home.active #hero-typing-text.hero-feature-title,
+html body #view-home.active #hero-typing-text.hero-feature-title .hero-type-char,
+body.light-theme #view-home.active #hero-typing-text.hero-feature-title,
+body.light-theme #view-home.active #hero-typing-text.hero-feature-title .hero-type-char {
+    font-style: normal !important;
+    transform: none !important;
+    transform-origin: center center !important;
+}
+
+/* Share the light-theme logo treatment with the dark theme. */
+html body:not(.light-theme) #app .glass-header .header-container .site-img-logo-brand,
+html body.light-theme #app .glass-header .header-container .site-img-logo-brand {
+    filter: brightness(0) saturate(100%) invert(29%) sepia(94%) saturate(1832%) hue-rotate(212deg) brightness(96%) contrast(94%) !important;
+    animation: brand-logo-glow-pulse-light 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+}
+
+html body:not(.light-theme) #app .glass-header .header-container .logo::after,
+html body.light-theme #app .glass-header .header-container .logo::after {
+    display: none !important;
+    opacity: 0 !important;
+    animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html body:not(.light-theme) #app .glass-header .header-container .site-img-logo-brand,
+    html body.light-theme #app .glass-header .header-container .site-img-logo-brand {
+        animation: none !important;
+    }
+}

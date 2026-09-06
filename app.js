@@ -4784,7 +4784,10 @@ const app = {
                 </td>
                 <td>${this.escapeHtml(p.duration)}</td>
                 <td>${this.escapeHtml(this.getWarrantyText(p))}</td>
-                <td class="text-price font-bold">${this.formatMoney(p.price)}</td>
+                <td class="text-price font-bold">
+                    <div>Web: ${this.formatMoney(p.price)}</div>
+                    <div style="color:#26a5e4;font-size:0.82rem;margin-top:4px;">Telegram: ${Number(p.telegramPrice) > 0 ? this.formatMoney(p.telegramPrice) : 'Dùng giá web'}</div>
+                </td>
                 <td class="font-bold" style="color: ${p.quantity > 0 ? '#2ecc71' : 'var(--danger)'};">${p.quantity !== undefined ? p.quantity : 0}</td>
                 <td>
                     <div style="font-size: 0.85rem; color: var(--text-muted); max-width: 250px;">
@@ -5367,6 +5370,7 @@ const app = {
         document.getElementById('product-warranty').value = warrantyEnabled ? (product.warranty || '') : '';
         this.toggleProductWarranty(warrantyEnabled);
         document.getElementById('product-price').value = product.price || '';
+        document.getElementById('product-telegram-price').value = product.telegramPrice || '';
         document.getElementById('product-quantity').value = product.quantity !== undefined ? product.quantity : 0;
         document.getElementById('product-logo').value = product.logoUrls && product.logoUrls.length > 0 ? product.logoUrls[0] : '';
         document.getElementById('product-desc').value = product.desc || '';
@@ -5456,6 +5460,8 @@ const app = {
         const warrantyInput = document.getElementById('product-warranty').value.trim();
         const warranty = warrantyEnabled ? (warrantyInput || 'Bảo hành') : 'Không bảo hành';
         const price = parseInt(document.getElementById('product-price').value);
+        const telegramPriceInput = document.getElementById('product-telegram-price').value.trim();
+        const telegramPrice = telegramPriceInput === '' ? null : parseInt(telegramPriceInput, 10);
         const manualQuantity = parseInt(document.getElementById('product-quantity').value);
         const logoUrl = document.getElementById('product-logo').value.trim();
         const desc = document.getElementById('product-desc').value.trim();
@@ -5472,7 +5478,9 @@ const app = {
                 ? picker.selectedProduct
                 : null);
 
-        if (!name || !categoryId || !duration || isNaN(price) || !logoUrl
+        if (!name || !categoryId || !duration || !Number.isInteger(price) || price <= 0
+            || (telegramPrice !== null && (!Number.isInteger(telegramPrice) || telegramPrice <= 0))
+            || !logoUrl
             || (sourceMode === 'manual' && (isNaN(manualQuantity) || manualQuantity < 0))
             || (sourceMode === 'provider' && (!providerId || !providerProductId || !providerProduct))) {
             this.showToast("Vui lòng điền đầy đủ thông tin hợp lệ!", 'warning');
@@ -5552,6 +5560,7 @@ const app = {
                 warranty: warranty || 'Không bảo hành',
                 warrantyEnabled,
                 price,
+                telegramPrice,
                 quantity,
                 logoUrls: [logoUrl],
                 desc,

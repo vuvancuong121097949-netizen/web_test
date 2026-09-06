@@ -1737,10 +1737,10 @@ const app = {
         const warrantyText = this.getWarrantyText(p);
         const categoryLabel = this.escapeHtml(this.getProductCategoryName(this.getProductCategory(p)));
         const sourceLabel = isProvider
-            ? 'Nguồn API tự động'
+            ? 'Tự Động'
             : (isAuto ? 'Tự động 24/7' : 'Admin cấp thủ công');
         const deliveryLabel = isProvider
-            ? 'Lấy hàng từ API và giao ngay sau thanh toán'
+            ? 'Giao Tự Động'
             : (isAuto ? 'Giao tự động sau thanh toán' : 'Admin xử lý và cấp tài khoản');
 
         const logoHtml = firstLogo
@@ -1764,7 +1764,7 @@ const app = {
             : '';
 
         const buyLabel = !inStock ? 'Hết hàng'
-            : this.appState.currentUser ? '<i class="fas fa-bolt"></i> Mua ngay'
+            : this.appState.currentUser ? 'Mua ngay'
                 : '<i class="fas fa-sign-in-alt"></i> Đăng nhập để mua';
 
         // Tạo overlay
@@ -1798,7 +1798,7 @@ const app = {
                         <div class="pm-option-section">
                             <div class="pm-section-heading">Thời hạn sử dụng</div>
                             <button class="pm-duration-choice is-selected" type="button" aria-pressed="true">
-                                <i class="fas fa-check"></i><span>${safeDuration}</span>
+                                <span>${safeDuration}</span>
                             </button>
                         </div>
                         ${safeDesc ? `<div class="pm-description-section"><div class="pm-section-heading">Mô tả sản phẩm</div><div class="pm-desc">${safeDesc}</div></div>` : ''}
@@ -2013,7 +2013,7 @@ const app = {
                 buyButton.innerHTML = !inStock
                     ? 'Hết hàng'
                     : (this.appState.currentUser
-                        ? '<i class="fas fa-bolt"></i> Mua ngay'
+                        ? 'Mua ngay'
                         : '<i class="fas fa-sign-in-alt"></i> Đăng nhập để mua');
             }
             if (cartButton) cartButton.disabled = !inStock;
@@ -2572,7 +2572,11 @@ const app = {
             if (rawData) {
                 // Chuyển object Firebase thành mảng
                 Object.keys(rawData).forEach(key => {
-                    tempAllOrders.push({ ...rawData[key], id: key });
+                    const order = rawData[key];
+                    // Ẩn các bản ghi Telegram cũ khỏi giao diện web.
+                    if (order && (order.source === 'telegram' || order.channel === 'telegram_bot'
+                        || String(order.username || '').startsWith('tg_'))) return;
+                    tempAllOrders.push({ ...order, id: key });
                 });
 
                 // Sắp xếp mới nhất lên đầu
@@ -2725,7 +2729,10 @@ const app = {
             const tempAll = [];
             if (rawData) {
                 Object.keys(rawData).forEach(key => {
-                    tempAll.push({ ...rawData[key], memo: key });
+                    const deposit = rawData[key];
+                    if (deposit && (deposit.source === 'telegram' || deposit.source === 'telegram_bot'
+                        || deposit.telegramId !== undefined || String(deposit.username || '').startsWith('tg_'))) return;
+                    tempAll.push({ ...deposit, memo: key });
                 });
                 tempAll.sort((a, b) => b.timestamp - a.timestamp);
             }
@@ -2760,7 +2767,10 @@ const app = {
             const tempUsers = [];
             if (rawData) {
                 Object.keys(rawData).forEach(key => {
-                    tempUsers.push({ username: key, ...rawData[key] });
+                    const user = rawData[key];
+                    if (user && (user.source === 'telegram' || user.source === 'telegram_bot'
+                        || user.telegramId !== undefined || String(key).startsWith('tg_'))) return;
+                    tempUsers.push({ username: key, ...user });
                 });
             }
             this.appState.allUsers = tempUsers;
@@ -4774,7 +4784,10 @@ const app = {
                 </td>
                 <td>${this.escapeHtml(p.duration)}</td>
                 <td>${this.escapeHtml(this.getWarrantyText(p))}</td>
-                <td class="text-price font-bold">${this.formatMoney(p.price)}</td>
+                <td class="text-price font-bold">
+                    <div>Web: ${this.formatMoney(p.price)}</div>
+                    <div style="color:#26a5e4;font-size:0.82rem;margin-top:4px;">Telegram: ${Number(p.telegramPrice) > 0 ? this.formatMoney(p.telegramPrice) : 'Dùng giá web'}</div>
+                </td>
                 <td class="font-bold" style="color: ${p.quantity > 0 ? '#2ecc71' : 'var(--danger)'};">${p.quantity !== undefined ? p.quantity : 0}</td>
                 <td>
                     <div style="font-size: 0.85rem; color: var(--text-muted); max-width: 250px;">
@@ -5357,6 +5370,7 @@ const app = {
         document.getElementById('product-warranty').value = warrantyEnabled ? (product.warranty || '') : '';
         this.toggleProductWarranty(warrantyEnabled);
         document.getElementById('product-price').value = product.price || '';
+        document.getElementById('product-telegram-price').value = product.telegramPrice || '';
         document.getElementById('product-quantity').value = product.quantity !== undefined ? product.quantity : 0;
         document.getElementById('product-logo').value = product.logoUrls && product.logoUrls.length > 0 ? product.logoUrls[0] : '';
         document.getElementById('product-desc').value = product.desc || '';
@@ -5446,6 +5460,8 @@ const app = {
         const warrantyInput = document.getElementById('product-warranty').value.trim();
         const warranty = warrantyEnabled ? (warrantyInput || 'Bảo hành') : 'Không bảo hành';
         const price = parseInt(document.getElementById('product-price').value);
+        const telegramPriceInput = document.getElementById('product-telegram-price').value.trim();
+        const telegramPrice = telegramPriceInput === '' ? null : parseInt(telegramPriceInput, 10);
         const manualQuantity = parseInt(document.getElementById('product-quantity').value);
         const logoUrl = document.getElementById('product-logo').value.trim();
         const desc = document.getElementById('product-desc').value.trim();
@@ -5462,7 +5478,9 @@ const app = {
                 ? picker.selectedProduct
                 : null);
 
-        if (!name || !categoryId || !duration || isNaN(price) || !logoUrl
+        if (!name || !categoryId || !duration || !Number.isInteger(price) || price <= 0
+            || (telegramPrice !== null && (!Number.isInteger(telegramPrice) || telegramPrice <= 0))
+            || !logoUrl
             || (sourceMode === 'manual' && (isNaN(manualQuantity) || manualQuantity < 0))
             || (sourceMode === 'provider' && (!providerId || !providerProductId || !providerProduct))) {
             this.showToast("Vui lòng điền đầy đủ thông tin hợp lệ!", 'warning');
@@ -5542,6 +5560,7 @@ const app = {
                 warranty: warranty || 'Không bảo hành',
                 warrantyEnabled,
                 price,
+                telegramPrice,
                 quantity,
                 logoUrls: [logoUrl],
                 desc,
